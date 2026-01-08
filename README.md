@@ -47,6 +47,8 @@ Sollte es während des Bauprozesses zu Fehlern kommen, die mit Redis zusammenhä
 
     
 sudo systemctl stop redis-server
+
+
 ---
 ###2.3 Docker-Container starten
 Starten Sie die Docker-Container im Detached-Modus (im Hintergrund).
