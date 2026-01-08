@@ -9,8 +9,7 @@ Dieses Repository enthält das Code- und Konfigurationsmaterial für das IOT-Mot
 Um auf den Raspberry Pi zuzugreifen, können Sie die folgenden SSH-Konfigurationen verwenden. Es sind Konfigurationen für WLAN und LAN enthalten.
 
 **SSH-Konfiguration (`~/.ssh/config`):**
-ⓘ
-For code that is intended to be used in Siemens products or services, the code generation features of our AI Services may only be used after prior approval of your responsible organizational unit.
+
 Host PC3
 #wifi
 HostName 192.168.178.26
@@ -48,7 +47,7 @@ Sollte es während des Bauprozesses zu Fehlern kommen, die mit Redis zusammenhä
 
     
 sudo systemctl stop redis-server
-
+---
 ###2.3 Docker-Container starten
 Starten Sie die Docker-Container im Detached-Modus (im Hintergrund).
 
