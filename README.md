@@ -34,7 +34,7 @@ Stellen Sie sicher, dass die virtuelle Python-Umgebung aktiviert ist, bevor Sie 
 
 
 source venv/bin/activate
-###2.2 Docker-Container bauen
+### 2.2 Docker-Container bauen
 Bauen Sie die Docker-Images für die Anwendung.
 
 
@@ -50,14 +50,14 @@ sudo systemctl stop redis-server
 
 
 ---
-###2.3 Docker-Container starten
+### 2.3 Docker-Container starten
 Starten Sie die Docker-Container im Detached-Modus (im Hintergrund).
 
 
     
 docker compose up -d
 
-##3. Zugriffs-URLs
+## 3. Zugriffs-URLs
 Nachdem die Docker-Container erfolgreich gestartet wurden, können Sie auf die folgenden Dienste zugreifen:
 
 Portainer:
