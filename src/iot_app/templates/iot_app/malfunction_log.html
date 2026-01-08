@@ -1,0 +1,206 @@
+<!--path: src/iot_app/templates/iot_app/malfunction_log.html-->
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Malfunction Log</title>
+    <style>
+        /* Basic styles for the body */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #eef2f7; /* Background color of the document */
+            color: #333; /* Standard text color */
+            line-height: 1.6; /* Line height for better readability */
+        }
+        /* Container for the main content of the page */
+        .container {
+            max-width: 1200px; /* Maximum width of the container */
+            margin: 20px auto; /* Center the container */
+            background: #fff; /* Background color of the container */
+            border-radius: 10px; /* Rounded corners */
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); /* Shadow for depth effect */
+            overflow: hidden; /* Prevents content overflow */
+            padding-bottom: 20px; /* Bottom inner padding */
+        }
+        /* Header section of the page */
+        .header-box {
+            background-color: #0056b3; /* Background color of the header */
+            color: white; /* Text color in the header */
+            padding: 25px 30px; /* Inner padding */
+            text-align: center; /* Center text alignment */
+            border-bottom: 5px solid #004085; /* Bottom border line */
+        }
+        /* Heading in the header section */
+        .header-box h1 {
+            margin: 0 0 10px 0; /* Outer margin */
+            font-size: 2.5em; /* Font size */
+        }
+        /* Paragraph text in the header section */
+        .header-box p {
+            margin: 0; /* Outer margin */
+            font-size: 1.1em; /* Font size */
+            opacity: 0.9; /* Slight transparency */
+        }
+        /* Area for navigation links */
+        .navigation-links {
+            margin-top: 20px; /* Top outer margin */
+        }
+        /* Style for navigation buttons */
+        .nav-button {
+            display: inline-block; /* Display as inline-block element */
+            background-color: #007bff; /* Background color (primary blue) */
+            color: white; /* Text color */
+            padding: 10px 20px; /* Inner padding */
+            border-radius: 5px; /* Rounded corners */
+            text-decoration: none; /* No text underlining */
+            font-weight: bold; /* Bold font weight */
+            transition: background-color 0.3s ease; /* Transition effect on hover */
+            margin: 0 5px; /* Outer margin between buttons */
+        }
+        /* Hover effect for navigation buttons */
+        .nav-button:hover {
+            background-color: #0056b3; /* Darker blue on hover */
+        }
+
+        /* Specific styles for the log area */
+        .log-section {
+            padding: 30px; /* Inner padding */
+        }
+        /* Heading in the log area */
+        .log-section h2 {
+            color: #0056b3; /* Text color */
+            margin-top: 0; /* Top outer margin */
+            border-bottom: 2px solid #e0e6ed; /* Bottom border line */
+            padding-bottom: 10px; /* Bottom inner padding */
+            margin-bottom: 20px; /* Bottom outer margin */
+        }
+        /* Table for malfunction messages */
+        .malfunction-table {
+            width: 100%; /* Full width */
+            border-collapse: collapse; /* Collapse cell borders */
+            margin-top: 20px; /* Top outer margin */
+            background-color: #f9fbfd; /* Background color of the table */
+            border: 1px solid #e0e6ed; /* Border around the table */
+            border-radius: 8px; /* Rounded corners */
+            overflow: hidden; /* Ensures rounded corners apply to content */
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05); /* Shadow */
+        }
+        /* Style for table header cells and data cells */
+        .malfunction-table th, .malfunction-table td {
+            padding: 12px 15px; /* Inner padding */
+            text-align: left; /* Left text alignment */
+            border-bottom: 1px solid #e0e6ed; /* Bottom border line */
+        }
+        /* Style for table header cells */
+        .malfunction-table th {
+            background-color: #eef2f7; /* Background color */
+            color: #0056b3; /* Text color */
+            font-weight: bold; /* Bold font weight */
+            text-transform: uppercase; /* Uppercase text */
+            font-size: 0.9em; /* Font size */
+        }
+        /* Background color for every second row in the table body */
+        .malfunction-table tbody tr:nth-child(even) {
+            background-color: #f6f8fa;
+        }
+        /* Hover effect for table rows */
+        .malfunction-table tbody tr:hover {
+            background-color: #e8f0f8;
+        }
+        /* Specific colors for log types */
+        .malfunction-table td.log-info {
+            color: #28a745; /* Green for info messages */
+            font-weight: bold;
+        }
+        .malfunction-table td.log-warning {
+            color: #ffc107; /* Yellow/Orange for warnings */
+            font-weight: bold;
+        }
+        .malfunction-table td.log-error {
+            color: #dc3545; /* Red for error messages */
+            font-weight: bold;
+        }
+
+        /* Footer of the page */
+        .footer {
+            margin-top: 30px; /* Top outer margin */
+            text-align: center; /* Center text alignment */
+            color: #777; /* Text color */
+            font-size: 0.85em; /* Font size */
+            padding: 20px; /* Inner padding */
+            background-color: #eef2f7; /* Background color */
+            border-top: 1px solid #e0e6ed; /* Top border line */
+        }
+        /* Style for links in the footer */
+        .footer a {
+            color: #0056b3; /* Text color */
+            text-decoration: none; /* No text underlining */
+        }
+        /* Hover effect for links in the footer */
+        .footer a:hover {
+            text-decoration: underline; /* Underline on hover */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-box">
+            <h1>Malfunction and Warning Log</h1>
+            <p>Overview of Past Events</p>
+            <div class="navigation-links">
+                {# Link to the dashboard, uses the named URL 'dashboard' from 'iot_app' #}
+                <a href="{% url 'iot_app:dashboard' %}" class="nav-button">Back to Dashboard</a>
+            </div>
+        </div>
+
+        <div class="log-section">
+            <h2>Past Malfunctions and Warnings</h2>
+            {# Checks if log entries exist to display the table #}
+            {% if malfunction_logs %}
+            <table class="malfunction-table">
+                <thead>
+                    <tr>
+                        <th>Date & Time</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th>Motor Status</th>
+                        <th>Emergency Stop Active</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {# Iterates over each log entry in the 'malfunction_logs' list #}
+                    {% for log in malfunction_logs %}
+                    <tr>
+                        {# Displays the log timestamp in German format #}
+                        <td>{{ log.timestamp|date:"d.m.Y H:i:s" }} Uhr</td>
+                        {# Applies a CSS class based on the log type and displays the type #}
+                        <td class="{{ log.css_class }}">{{ log.message_type }}</td>
+                        {# Displays the description of the log entry #}
+                        <td>{{ log.description }}</td>
+                        {# Displays the motor status at the time of the log #}
+                        <td>{{ log.motor_state }}</td>
+                        {# Indicates whether the emergency stop was active #}
+                        <td>{{ log.emergency_stop_active }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            {# Message if no log entries were found #}
+            <p>No past malfunctions or warnings found.</p>
+            {% endif %}
+        </div>
+
+        <div class="footer">
+            {# Displays the current year, dynamically generated #}
+            <p>&copy; {{ current_year }} IoT Dashboard. All rights reserved.</p>
+            {# Link to the Django Admin Panel #}
+            <p>Administration: <a href="/admin/" target="_blank">Admin Panel</a></p>
+        </div>
+    </div>
+</body>
+</html>

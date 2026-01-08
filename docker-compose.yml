@@ -1,0 +1,101 @@
+# IOT_PROJECT/docker-compose.yml
+
+services:
+  web:
+    build: .
+    command: sh -c "sleep 10 && python manage.py collectstatic --noinput && python manage.py migrate && gunicorn iot_project.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000"
+    volumes:
+      - ./src:/app
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    environment:
+      - DJANGO_SETTINGS_MODULE=iot_project.settings
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS}
+      - DOCKER_MQTT_BROKER_HOST=${DOCKER_MQTT_BROKER_HOST}
+      - MQTT_BROKER_PORT=${MQTT_BROKER_PORT}
+      - DJANGO_DEBUG=${DEBUG}
+      - MQTT_TOPIC_MALFUNCTION_INFO=${MQTT_TOPIC_MALFUNCTION_INFO}
+      - MQTT_TOPIC_MALFUNCTION_WARNING=${MQTT_TOPIC_MALFUNCTION_WARNING}
+      - MQTT_TOPIC_MALFUNCTION_ERROR=${MQTT_TOPIC_MALFUNCTION_ERROR}
+      - TZ=Europe/Berlin
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+      - mqtt_broker
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  mqtt_broker:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto_config:/mosquitto/config
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    environment:
+      - TZ=Europe/Berlin
+    restart: unless-stopped
+
+  dummy_data_publisher:
+    build: .
+    command: python scripts/dummy_data_publisher.py
+    volumes:
+      - ./src:/app
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    environment:
+      - TZ=Europe/Berlin
+    env_file:
+      - .env
+    depends_on:
+      - mqtt_broker
+    restart: unless-stopped
+
+  mqtt_consumer:
+    build: .
+    command: python manage.py run_mqtt_consumer
+    volumes:
+      - ./src:/app
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    environment:
+      - TZ=Europe/Berlin
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+      - mqtt_broker
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

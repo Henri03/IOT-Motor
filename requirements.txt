@@ -1,0 +1,9 @@
+Django>=4.2
+psycopg2-binary
+channels[redis]
+daphne
+paho-mqtt
+gunicorn
+uvicorn[standard]
+channels_redis
+whitenoise

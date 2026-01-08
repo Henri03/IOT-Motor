@@ -1,0 +1,1083 @@
+<!--path: src/iot_app/templates/iot_app/dashboard.html-->
+{% load static %}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Set the title of the dashboard using motor information -->
+    <title>IoT Dashboard: {{ motor_info.name }}</title>
+    <style>
+        /* Basic styling for the body */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #eef2f7;
+            color: #333;
+            line-height: 1.6;
+        }
+        /* Container for the main content, centering it and applying shadow */
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        /* Styling for the header section */
+        .header-box {
+            background-color: #0056b3;
+            color: white;
+            padding: 25px 30px;
+            text-align: center;
+            border-bottom: 5px solid #004085;
+        }
+        /* Header title styling */
+        .header-box h1 {
+            margin: 0 0 10px 0;
+            font-size: 2.5em;
+        }
+        /* Header paragraph styling */
+        .header-box p {
+            margin: 0;
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        /* Layout for displaying motor information in the header */
+        .header-info {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-top: 15px;
+        }
+        /* Styling for individual info items in the header */
+        .header-info div {
+            background-color: rgba(255,255,255,0.15);
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            flex-basis: 200px; /* Base width for flex items */
+        }
+        /* Styling for strong text within header info */
+        .header-info strong {
+            display: block;
+            font-size: 1.2em;
+            margin-bottom: 3px;
+        }
+
+        /* Styling for navigation links */
+        .navigation-links {
+            margin-top: 20px;
+        }
+        /* Styling for navigation buttons */
+        .nav-button {
+            display: inline-block;
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+            margin: 0 5px;
+        }
+        /* Hover effect for navigation buttons */
+        .nav-button:hover {
+            background-color: #0056b3;
+        }
+
+        /* Styling for the anomaly status display */
+        .anomaly-status {
+            padding: 15px 30px;
+            border-radius: 0 0 10px 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        /* Specific styling for no anomaly alert */
+        .no-anomaly-alert {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        /* Specific styling for anomaly alert */
+        .anomaly-alert {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        /* Layout for the main dashboard columns */
+        .main-dashboard-columns {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+            padding: 30px;
+        }
+        /* Styling for individual dashboard columns */
+        .dashboard-column {
+            flex: 1; /* Allows columns to grow and shrink */
+            min-width: 45%; /* Minimum width to prevent excessive shrinking */
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+
+        /* Styling for data panels */
+        .data-panel {
+            background-color: #f9fbfd;
+            border: 1px solid #e0e6ed;
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            flex-grow: 0; /* Prevents panel from growing unnecessarily */
+        }
+        /* Heading styling within data panels */
+        .data-panel h2 {
+            color: #0056b3;
+            margin-top: 0;
+            border-bottom: 2px solid #e0e6ed;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        /* Styling for the motor display section */
+        .motor-display {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        /* Styling for the motor image container */
+        .motor-image {
+            width: 180px;
+            height: 180px;
+            background-color: #ccc;
+            border-radius: 50%; /* Makes image circular */
+            overflow: hidden;
+            margin-bottom: 15px;
+            border: 3px solid #0056b3;
+            box-shadow: 0 0 15px rgba(0,86,179,0.3);
+        }
+        /* Styling for the actual motor image */
+        .motor-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Ensures image covers the area */
+        }
+        /* Grid layout for displaying data items */
+        .data-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Two columns */
+            gap: 15px;
+            text-align: left;
+        }
+        /* Styling for individual data items */
+        .data-item {
+            padding: 8px 0;
+            border-bottom: 1px dashed #eee;
+        }
+        /* Padding for alternating data items */
+        .data-item:nth-child(odd) {
+            padding-right: 10px;
+        }
+        .data-item:nth-child(even) {
+            padding-left: 10px;
+        }
+        /* Remove bottom border for last data items */
+        .data-item:last-child, .data-grid div:nth-last-child(2) {
+            border-bottom: none;
+        }
+        /* Styling for strong text in data items */
+        .data-item strong {
+            color: #004085;
+        }
+        /* Styling for span elements in data items (values) */
+        .data-item span {
+            float: right;
+            font-weight: bold;
+        }
+
+        /* Styling for graph sections */
+        .graph-section {
+            background-color: #f9fbfd;
+            border: 1px solid #e0e6ed;
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        /* Heading styling within graph sections */
+        .graph-section h2 {
+            color: #0056b3;
+            border-bottom: 2px solid #e0e6ed;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        /* Container for multiple graphs */
+        .graph-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: space-around;
+        }
+        /* Wrapper for individual charts */
+        .chart-wrapper {
+            flex: 1;
+            min-width: 100%; /* Charts take full width on smaller screens */
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            text-align: center;
+            height: 350px; /* Fixed height for charts */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        /* Heading styling within chart wrappers */
+        .chart-wrapper h3 {
+            color: #0056b3;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        /* Styling for canvas elements (charts) */
+        .chart-wrapper canvas {
+            height: 280px;
+            width: 100%;
+            flex-grow: 1;
+        }
+
+        /* Styling for the time range selector section */
+        .time-range-selector {
+            background-color: #f9fbfd;
+            border: 1px solid #e0e6ed;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+        /* Label styling within time range selector */
+        .time-range-selector label {
+            margin-right: 10px;
+            font-weight: bold;
+            color: #0056b3;
+        }
+        /* Input field styling for date/time */
+        .time-range-selector input[type="datetime-local"] {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-right: 10px;
+            width: 200px;
+        }
+        /* Button styling within time range selector */
+        .time-range-selector button {
+            background-color: #28a745;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+            margin: 5px;
+        }
+        /* Hover effect for time range selector buttons */
+        .time-range-selector button:hover {
+            background-color: #218838;
+        }
+
+        /* Footer styling */
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #777;
+            font-size: 0.85em;
+            padding: 20px;
+            background-color: #eef2f7;
+            border-top: 1px solid #e0e6ed;
+        }
+        /* Link styling in the footer */
+        .footer a {
+            color: #0056b3;
+            text-decoration: none;
+        }
+        /* Hover effect for footer links */
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive design for smaller screens */
+        @media (max-width: 768px) {
+            /* Stack dashboard columns vertically */
+            .main-dashboard-columns {
+                flex-direction: column;
+                padding: 15px;
+            }
+            /* Make columns take full width */
+            .dashboard-column {
+                min-width: 100%;
+            }
+            /* Stack header info items vertically */
+            .header-info {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            /* Center text in header info items */
+            .header-info div {
+                text-align: center;
+            }
+            /* Make data grid a single column */
+            .data-grid {
+                grid-template-columns: 1fr;
+            }
+            /* Remove padding for data items in single column layout */
+            .data-item:nth-child(odd), .data-item:nth-child(even) {
+                padding-left: 0;
+                padding-right: 0;
+            }
+            /* Make chart wrappers take full width */
+            .chart-wrapper {
+                min-width: 100%;
+            }
+            /* Make time range inputs and buttons take full width */
+            .time-range-selector input[type="datetime-local"] {
+                width: 100%;
+                margin-bottom: 10px;
+            }
+            .time-range-selector button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header section displaying motor name, model, description, and key information -->
+        <div class="header-box">
+            <h1>{{ motor_info.name }} {{ motor_info.model }} IoT Dashboard</h1>
+            <p>{{ motor_info.description }}</p>
+            <div class="header-info">
+                <div><strong>Kennzeichnung:</strong> {{ motor_info.identification }}</div>
+                <div><strong>Ort:</strong> {{ motor_info.location }}</div>
+                <div><strong>Inbetriebnahme:</strong> {{ motor_info.commissioning_date|default:"N/A" }}</div>
+                <div><strong>Betriebsmodus:</strong> {{ motor_info.operating_mode }}</div>
+            </div>
+            <!-- Navigation link to the malfunction log page -->
+            <div class="navigation-links">
+                <a href="{% url 'iot_app:malfunction_log' %}" class="nav-button">Störmeldungs-Log anzeigen</a>
+            </div>
+        </div>
+
+        <!-- Anomaly status display, dynamically styled based on 'anomaly_status.detected' -->
+        <div id="anomaly-status" class="anomaly-status {% if anomaly_status.detected %}anomaly-alert{% else %}no-anomaly-alert{% endif %}">
+            {{ anomaly_status.message }}
+        </div>
+
+        <!-- Main dashboard content organized into two columns -->
+        <div class="main-dashboard-columns">
+            <!-- Left column for real motor data and graphs -->
+            <div class="dashboard-column">
+                <!-- Panel for current real motor data -->
+                <div class="data-panel">
+                    <h2>Aktuelle Motordaten</h2>
+                    <div class="motor-display">
+                        <!-- Image representing the real motor -->
+                        <div class="motor-image">
+                            <img src="{% static 'images/motor.png' %}" alt="Bild des Elektromotors">
+                        </div>
+                        <p>Echtzeitdaten vom Frequenzumrichter und angeschlossenen Sensoren.</p>
+                    </div>
+                    <!-- Grid displaying real-time sensor values -->
+                    <div class="data-grid" id="real-motor-data-grid">
+                        <div class="data-item"><strong>Strom:</strong> <span id="real-strom">{{ real_motor_data.Strom.value|default:'N/A' }} {{ real_motor_data.Strom.unit }}</span></div>
+                        <div class="data-item"><strong>Spannung:</strong> <span id="real-spannung">{{ real_motor_data.Spannung.value|default:'N/A' }} {{ real_motor_data.Spannung.unit }}</span></div>
+                        <div class="data-item"><strong>Drehzahl:</strong> <span id="real-drehzahl">{{ real_motor_data.Drehzahl.value|default:'N/A' }} {{ real_motor_data.Drehzahl.unit }}</span></div>
+                        <div class="data-item"><strong>Vibration:</strong> <span id="real-vibration">{{ real_motor_data.Vibration.value|default:'N/A' }} {{ real_motor_data.Vibration.unit }}</span></div>
+                        <div class="data-item"><strong>Temperatur:</strong> <span id="real-temperatur">{{ real_motor_data.Temperatur.value|default:'N/A' }} {{ real_motor_data.Temperatur.unit }}</span></div>
+                        <div class="data-item"><strong>Drehmoment:</strong> <span id="real-drehmoment">{{ real_motor_data.Drehmoment.value|default:'N/A' }} {{ real_motor_data.Drehmoment.unit }}</span></div>
+                        <div class="data-item"><strong>Anzahl eingefahren:</strong> <span id="real-anzahl-eingefahren">{{ real_motor_data.Anzahl_eingefahren.value|default:'N/A' }}</span></div>
+                        <div class="data-item"><strong>Anzahl ausgefahren:</strong> <span id="real-anzahl-ausgefahren">{{ real_motor_data.Anzahl_ausgefahren.value|default:'N/A' }}</span></div>
+                    </div>
+                </div>
+
+                <!-- Section for real motor data graphs -->
+                <div class="graph-section">
+                    <h2>Graphen des realen Motors</h2>
+                    <div class="graph-container">
+                        <!-- Chart for real current and voltage -->
+                        <div class="chart-wrapper">
+                            <h3>Strom- und Spannungsverlauf über die Zeit</h3>
+                            <canvas id="real-current-voltage-chart"></canvas>
+                        </div>
+                        <!-- Chart for real RPM -->
+                        <div class="chart-wrapper">
+                            <h3>Drehzahlverlauf über die Zeit</h3>
+                            <canvas id="real-rpm-chart"></canvas>
+                        </div>
+                        <!-- Chart for real vibration -->
+                        <div class="chart-wrapper">
+                            <h3>Vibrationsverlauf über die Zeit</h3>
+                            <canvas id="real-vibration-chart"></canvas>
+                        </div>
+                        <!-- Chart for real temperature -->
+                        <div class="chart-wrapper">
+                            <h3>Temperaturverlauf über die Zeit</h3>
+                            <canvas id="real-temp-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right column for digital twin data and graphs -->
+            <div class="dashboard-column">
+                <!-- Panel for digital twin (expected) data -->
+                <div class="data-panel">
+                    <h2>Digitaler Zwilling (Erwartete Werte)</h2>
+                    <div class="motor-display">
+                        <!-- Image representing the digital twin -->
+                        <div class="motor-image">
+                            <img src="{% static 'images/motor_twin.png' %}" alt="Bild des Digitalen Zwillings">
+                        </div>
+                        <p>Modellierte Werte basierend auf dem digitalen Zwillingsmodell.</p>
+                    </div>
+                    <!-- Grid displaying expected sensor values from the digital twin -->
+                    <div class="data-grid" id="digital-twin-data-grid">
+                        <div class="data-item"><strong>Strom:</strong> <span id="expected-strom">{{ digital_twin_data.Strom.value|default:'N/A' }} {{ digital_twin_data.Strom.unit }}</span></div>
+                        <div class="data-item"><strong>Spannung:</strong> <span id="expected-spannung">{{ digital_twin_data.Spannung.value|default:'N/A' }} {{ digital_twin_data.Spannung.unit }}</span></div>
+                        <div class="data-item"><strong>Drehzahl:</strong> <span id="expected-drehzahl">{{ digital_twin_data.Drehzahl.value|default:'N/A' }} {{ digital_twin_data.Drehzahl.unit }}</span></div>
+                        <div class="data-item"><strong>Vibration:</strong> <span id="expected-vibration">{{ digital_twin_data.Vibration.value|default:'N/A' }} {{ digital_twin_data.Vibration.unit }}</span></div>
+                        <div class="data-item"><strong>Temperatur:</strong> <span id="expected-temperatur">{{ digital_twin_data.Temperatur.value|default:'N/A' }} {{ digital_twin_data.Temperatur.unit }}</span></div>
+                        <div class="data-item"><strong>Drehmoment:</strong> <span id="expected-drehmoment">{{ digital_twin_data.Drehmoment.value|default:'N/A' }} {{ digital_twin_data.Drehmoment.unit }}</span></div>
+                        <div class="data-item"><strong>Anzahl eingefahren:</strong> <span id="expected-anzahl-eingefahren">{{ digital_twin_data.Anzahl_eingefahren.value|default:'N/A' }}</span></div>
+                        <div class="data-item"><strong>Anzahl ausgefahren:</strong> <span id="expected-anzahl-ausgefahren">{{ digital_twin_data.Anzahl_ausgefahren.value|default:'N/A' }}</span></div>
+                    </div>
+                </div>
+
+                <!-- Section for digital twin data graphs -->
+                <div class="graph-section">
+                    <h2>Graphen des digitalen Zwillings</h2>
+                    <div class="graph-container">
+                        <!-- Chart for digital twin current and voltage -->
+                        <div class="chart-wrapper">
+                            <h3>Strom- und Spannungsverlauf über die Zeit (Modell)</h3>
+                            <canvas id="dt-current-voltage-chart"></canvas>
+                        </div>
+                        <!-- Chart for digital twin RPM -->
+                        <div class="chart-wrapper">
+                            <h3>Drehzahlverlauf über die Zeit (Modell)</h3>
+                            <canvas id="dt-rpm-chart"></canvas>
+                        </div>
+                        <!-- Chart for digital twin vibration -->
+                        <div class="chart-wrapper">
+                            <h3>Vibrationsverlauf über die Zeit (Modell)</h3>
+                            <canvas id="dt-vibration-chart"></canvas>
+                        </div>
+                        <!-- Chart for digital twin temperature -->
+                        <div class="chart-wrapper">
+                            <h3>Temperaturverlauf über die Zeit (Modell)</h3>
+                            <canvas id="dt-temp-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Time range selector for plotting historical data -->
+        <div class="time-range-selector">
+            <h2>Plot-Zeitbereich auswählen</h2>
+            <div>
+                <label for="plot-start-time">Startzeit:</label>
+                <input type="datetime-local" id="plot-start-time" step="1">
+                <label for="plot-end-time">Endzeit:</label>
+                <input type="datetime-local" id="plot-end-time" step="1">
+                <button id="apply-time-range" class="nav-button">Anwenden</button>
+                <button id="reset-time-range" class="nav-button">Aktuellen Lauf anzeigen</button>
+            </div>
+        </div>
+
+        <!-- Footer section -->
+        <div class="footer">
+            <p>&copy; {{ current_year }} IoT Dashboard. Alle Rechte vorbehalten.</p>
+            <p>Verwaltung: <a href="/admin/" target="_blank">Admin-Panel</a></p>
+        </div>
+    </div>
+
+   <!-- Chart.js library for creating graphs -->
+   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+   <!-- Chart.js adapter for date-fns for time series data -->
+   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+   <script>
+        // Determine WebSocket protocol based on current page's protocol
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        // Construct WebSocket URL for the dashboard endpoint
+        const ws_path = protocol + window.location.host + `/ws/dashboard/`;
+        // Create a new WebSocket connection
+        const socket = new WebSocket(ws_path);
+
+        // Object to store Chart.js instances
+        let charts = {};
+        // Flag to indicate if a manual time range is active for plotting
+        let manualTimeRangeActive = false;
+        // Maximum number of data points to display in real-time charts
+        const MAX_DATA_POINTS = 500;
+
+        // Configuration for shared Y-axis scales across real and digital twin charts
+        const yAxisSharedGroups = {
+            'current': {
+                liveChartId: 'real-current-voltage-chart', liveDatasetIndex: 0,
+                twinChartId: 'dt-current-voltage-chart', twinDatasetIndex: 0,
+                yAxisID: 'y1'
+            },
+            'voltage': {
+                liveChartId: 'real-current-voltage-chart', liveDatasetIndex: 1,
+                twinChartId: 'dt-current-voltage-chart', twinDatasetIndex: 1,
+                yAxisID: 'y2'
+            },
+            'rpm': {
+                liveChartId: 'real-rpm-chart', liveDatasetIndex: 0,
+                twinChartId: 'dt-rpm-chart', twinDatasetIndex: 0,
+                yAxisID: 'y'
+            },
+            'vibration': {
+                liveChartId: 'real-vibration-chart', liveDatasetIndex: 0,
+                twinChartId: 'dt-vibration-chart', twinDatasetIndex: 0,
+                yAxisID: 'y'
+            },
+            'temp': {
+                liveChartId: 'real-temp-chart', liveDatasetIndex: 0,
+                twinChartId: 'dt-temp-chart', twinDatasetIndex: 0,
+                yAxisID: 'y'
+            }
+        };
+
+        /**
+         * Converts a string to a URL-friendly slug format.
+         * @param {string} text - The input string.
+         * @returns {string} The slugified string.
+         */
+        function createSlug(text) {
+            return text.toLowerCase()
+                       .replace(/[\s_]+/g, '-') // Replace spaces/underscores with hyphens
+                       .replace(/[^a-z0-9-]+/g, '') // Remove non-alphanumeric characters except hyphens
+                       .replace(/^-*|-*$/g, ''); // Trim leading/trailing hyphens
+        }
+
+        /**
+         * Initializes a Chart.js chart on a given canvas.
+         * @param {string} canvasId - The ID of the canvas element.
+         * @param {string} title - The title of the chart.
+         * @param {Array<Object>} datasetsConfig - An array of dataset configurations.
+         * @param {Object} chartOptions - Additional Chart.js options to merge.
+         * @returns {Chart} The initialized Chart.js instance.
+         */
+        function initializeChart(canvasId, title, datasetsConfig, chartOptions = {}) {
+            // Get the 2D rendering context of the canvas
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            // Default options for all charts
+            const defaultOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 0 }, // Disable animation for real-time updates
+                plugins: {
+                    legend: { display: true },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: {
+                    x: {
+                        type: 'time', // X-axis is time-based
+                        time: {
+                            unit: 'second',
+                            displayFormats: { second: 'HH:mm:ss' }
+                        },
+                        title: { display: true, text: 'Zeit' },
+                        min: undefined, // Will be set dynamically
+                        max: undefined, // Will be set dynamically
+                    }
+                }
+            };
+
+            // Merge default options with any provided custom options
+            const mergedOptions = {
+                ...defaultOptions,
+                ...chartOptions,
+                scales: {
+                    ...defaultOptions.scales,
+                    ...(chartOptions.scales || {}) // Merge scales specifically
+                }
+            };
+
+            // Create a new Chart.js instance
+            const newChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: datasetsConfig.map(ds => ({
+                        label: ds.label,
+                        data: [], // Initial empty data array
+                        borderColor: ds.borderColor,
+                        backgroundColor: ds.backgroundColor || 'rgba(0, 0, 0, 0)', // Transparent background by default
+                        borderWidth: 2,
+                        pointRadius: 0, // No points displayed
+                        tension: 0.1, // Smooth line tension
+                        yAxisID: ds.yAxisID || 'y', // Default Y-axis ID
+                    }))
+                },
+                options: mergedOptions
+            });
+            // Store the chart instance in the global 'charts' object
+            charts[canvasId] = newChart;
+            return newChart;
+        }
+
+        /**
+         * Applies shared Y-axis scaling across corresponding real and digital twin charts.
+         * This ensures that the Y-axis range is consistent for related metrics.
+         */
+        function applySharedYAxisScale() {
+            // Iterate through each metric group defined in yAxisSharedGroups
+            for (const metricKey in yAxisSharedGroups) {
+                const group = yAxisSharedGroups[metricKey];
+                // Get the Chart.js instances for the live and twin charts
+                const liveChart = charts[group.liveChartId];
+                const twinChart = charts[group.twinChartId];
+
+                // Skip if either chart is not initialized
+                if (!liveChart || !twinChart) continue;
+
+                // Get data from the relevant datasets
+                const liveData = liveChart.data.datasets[group.liveDatasetIndex].data;
+                const twinData = twinChart.data.datasets[group.twinDatasetIndex].data;
+
+                // Collect all Y-values from both datasets
+                const allYValues = [];
+                liveData.forEach(p => allYValues.push(p.y));
+                twinData.forEach(p => allYValues.push(p.y));
+
+                // If there's data, calculate min/max and apply padding
+                if (allYValues.length > 0) {
+                    let minVal = Math.min(...allYValues);
+                    let maxVal = Math.max(...allYValues);
+
+                    const padding = (maxVal - minVal) * 0.1; // 10% padding
+                    minVal = minVal - padding;
+                    maxVal = maxVal + padding;
+
+                    // Ensure minVal doesn't go below 0 if all original values are positive
+                    if (minVal < 0 && Math.min(...allYValues) >= 0) minVal = 0;
+
+                    // Apply the calculated min/max to both live and twin charts' Y-axes
+                    if (liveChart.options.scales[group.yAxisID]) {
+                        liveChart.options.scales[group.yAxisID].min = minVal;
+                        liveChart.options.scales[group.yAxisID].max = maxVal;
+                    }
+                    if (twinChart.options.scales[group.yAxisID]) {
+                        twinChart.options.scales[group.yAxisID].min = minVal;
+                        twinChart.options.scales[group.yAxisID].max = maxVal;
+                    }
+                } else {
+                    // If no data, reset Y-axis scales to auto
+                    if (liveChart.options.scales[group.yAxisID]) {
+                        liveChart.options.scales[group.yAxisID].min = undefined;
+                        liveChart.options.scales[group.yAxisID].max = undefined;
+                    }
+                    if (twinChart.options.scales[group.yAxisID]) {
+                        twinChart.options.scales[group.yAxisID].min = undefined;
+                        twinChart.options.scales[group.yAxisID].max = undefined;
+                    }
+                }
+                // Update charts without animation
+                liveChart.update('none');
+                twinChart.update('none');
+            }
+        }
+
+        /**
+         * Updates the UI elements (data values and anomaly status) with new data.
+         * @param {Object} data - The data object received from the WebSocket.
+         */
+        function updateUI(data) {
+            // Update real motor data
+            if (data.real_motor_data) {
+                const realData = data.real_motor_data;
+                for (const key in realData) {
+                    const slugifiedKey = createSlug(key);
+                    const elementId = `real-${slugifiedKey}`;
+                    const element = document.getElementById(elementId);
+                    if (element) {
+                        const newValue = realData[key].value !== null ? realData[key].value : 'N/A';
+                        element.textContent = `${newValue} ${realData[key].unit}`;
+                    }
+                }
+            }
+
+            // Update digital twin data
+            if (data.digital_twin_data) {
+                const twinData = data.digital_twin_data;
+                for (const key in twinData) {
+                    const slugifiedKey = createSlug(key);
+                    const elementId = `expected-${slugifiedKey}`;
+                    const element = document.getElementById(elementId);
+                    if (element) {
+                        const newValue = twinData[key].value !== null ? twinData[key].value : 'N/A';
+                        element.textContent = `${newValue} ${twinData[key].unit}`;
+                    }
+                }
+            }
+
+            // Update anomaly status
+            if (data.anomaly_status) {
+                const anomalyStatusElement = document.getElementById('anomaly-status');
+                const anomaly = data.anomaly_status;
+                if (anomalyStatusElement) {
+                    anomalyStatusElement.textContent = anomaly.message;
+                    // Apply appropriate CSS class based on anomaly detection
+                    if (anomaly.detected) {
+                        anomalyStatusElement.className = 'anomaly-status anomaly-alert';
+                    } else {
+                        anomalyStatusElement.className = 'anomaly-status no-anomaly-alert';
+                    }
+                }
+            }
+        }
+
+        /**
+         * Updates all charts with historical data received from the server.
+         * Clears existing chart data and repopulates with the new historical data.
+         * @param {Object} plotData - Historical data for live and twin metrics.
+         * @param {string} plotType - Type of plot data (e.g., 'initial_historical', 'historical_range').
+         * @param {string} startTime - The start time of the historical data range.
+         * @param {string} endTime - The end time of the historical data range.
+         */
+        function updateChartsWithHistoricalData(plotData, plotType, startTime, endTime) {
+            // Clear all existing chart data
+            Object.values(charts).forEach(chart => {
+                chart.data.datasets.forEach(dataset => {
+                    dataset.data = [];
+                });
+            });
+
+            // Populate real motor charts with historical data
+            if (plotData.live) {
+                charts['real-current-voltage-chart'].data.datasets[0].data = plotData.live.current.map(p => ({x: new Date(p.x), y: p.y}));
+                charts['real-current-voltage-chart'].data.datasets[1].data = plotData.live.voltage.map(p => ({x: new Date(p.x), y: p.y}));
+                charts['real-rpm-chart'].data.datasets[0].data = plotData.live.rpm.map(p => ({x: new Date(p.x), y: p.y}));
+                charts['real-vibration-chart'].data.datasets[0].data = plotData.live.vibration.map(p => ({x: new Date(p.x), y: p.y}));
+                charts['real-temp-chart'].data.datasets[0].data = plotData.live.temp.map(p => ({x: new Date(p.x), y: p.y}));
+            }
+            // Populate digital twin charts with historical data
+            if (plotData.twin) {
+                charts['dt-current-voltage-chart'].data.datasets[0].data = plotData.twin.current.map(p => ({x: new Date(p.x), y: p.y}));
+                charts['dt-current-voltage-chart'].data.datasets[1].data = plotData.twin.voltage.map(p => ({x: new Date(p.x), y: p.y}));
+                charts['dt-rpm-chart'].data.datasets[0].data = plotData.twin.rpm.map(p => ({x: new Date(p.x), y: p.y}));
+                charts['dt-vibration-chart'].data.datasets[0].data = plotData.twin.vibration.map(p => ({x: new Date(p.x), y: p.y}));
+                charts['dt-temp-chart'].data.datasets[0].data = plotData.twin.temp.map(p => ({x: new Date(p.x), y: p.y}));
+            }
+
+            // Update chart X-axis scales based on the historical time range
+            Object.values(charts).forEach(chart => {
+                if (startTime && endTime) {
+                    chart.options.scales.x.min = new Date(startTime);
+                    chart.options.scales.x.max = new Date(endTime);
+                } else {
+                    // Reset to auto-scaling if no specific time range is provided
+                    chart.options.scales.x.min = undefined;
+                    chart.options.scales.x.max = undefined;
+                }
+                chart.update('none'); // Update charts without animation
+            });
+
+            // Apply shared Y-axis scaling after updating data
+            applySharedYAxisScale();
+
+            // Update time range input fields and manualTimeRangeActive flag
+            if (plotType === 'initial_historical') {
+                document.getElementById('plot-start-time').value = startTime ? new Date(startTime).toISOString().slice(0, 19) : '';
+                document.getElementById('plot-end-time').value = endTime ? new Date(endTime).toISOString().slice(0, 19) : '';
+                manualTimeRangeActive = false; // Reset to live mode
+            } else if (plotType === 'historical_range') {
+                manualTimeRangeActive = true; // Stay in manual time range mode
+            }
+        }
+
+        /**
+         * Adds a single new data point to the end of all relevant real-time charts.
+         * This function is skipped if a manual time range is active.
+         * @param {Object} dataPoint - The latest data point containing live and twin metric values.
+         */
+        function addLatestDataPoint(dataPoint) {
+            // Do not update charts with new live data if a manual time range is active
+            if (manualTimeRangeActive) {
+                return;
+            }
+
+            // Iterate through all initialized charts
+            Object.values(charts).forEach(chart => {
+                // Iterate through each dataset within the current chart
+                chart.data.datasets.forEach(dataset => {
+                    let metricKey;
+                    let sourceData;
+
+                    // Determine the metric key based on the dataset label
+                    if (dataset.label.includes('Strom')) {
+                        metricKey = 'current';
+                    } else if (dataset.label.includes('Spannung')) {
+                        metricKey = 'voltage';
+                    } else if (dataset.label.includes('Drehzahl')) {
+                        metricKey = 'rpm';
+                    } else if (dataset.label.includes('Vibration')) {
+                        metricKey = 'vibration';
+                    } else if (dataset.label.includes('Temperatur')) {
+                        metricKey = 'temp';
+                    } else {
+                        return; // Skip if metric key cannot be determined
+                    }
+
+                    // Determine if the data comes from live or digital twin source
+                    if (dataset.label.includes('Modell')) {
+                        sourceData = dataPoint.twin;
+                    } else {
+                        sourceData = dataPoint.live;
+                    }
+
+                    // If source data and metric exist, add the new point
+                    if (sourceData && sourceData[metricKey]) {
+                        const newPoint = { x: new Date(sourceData[metricKey].x), y: sourceData[metricKey].y };
+                        dataset.data.push(newPoint);
+                    }
+
+                    // Remove oldest data points if MAX_DATA_POINTS limit is exceeded
+                    if (dataset.data.length > MAX_DATA_POINTS) {
+                        dataset.data.splice(0, dataset.data.length - MAX_DATA_POINTS);
+                    }
+                });
+
+                // Adjust X-axis min/max to show the latest MAX_DATA_POINTS
+                if (chart.data.datasets[0] && chart.data.datasets[0].data.length > 0) {
+                    const firstTimestamp = chart.data.datasets[0].data[0].x;
+                    const lastTimestamp = chart.data.datasets[0].data[chart.data.datasets[0].data.length - 1].x;
+                    chart.options.scales.x.min = firstTimestamp;
+                    chart.options.scales.x.max = lastTimestamp;
+                } else {
+                    // Reset X-axis to auto if no data
+                    chart.options.scales.x.min = undefined;
+                    chart.options.scales.x.max = undefined;
+                }
+
+                chart.update('none'); // Update chart without animation
+            });
+            applySharedYAxisScale(); // Re-apply shared Y-axis scaling
+        }
+
+        // Event listener for when the DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize real motor current and voltage chart with two Y-axes
+            initializeChart('real-current-voltage-chart', 'Strom- und Spannungsverlauf über die Zeit', [
+                { label: 'Strom (A)', borderColor: 'rgb(75, 192, 192)', yAxisID: 'y1' },
+                { label: 'Spannung (V)', borderColor: 'rgb(255, 99, 132)', yAxisID: 'y2' }
+            ], {
+                scales: {
+                    y1: {
+                        position: 'left',
+                        title: { display: true, text: 'Strom (A)' },
+                        beginAtZero: false
+                    },
+                    y2: {
+                        position: 'right',
+                        title: { display: true, text: 'Spannung (V)' },
+                        grid: { drawOnChartArea: false }, // Hide grid lines for secondary axis
+                        beginAtZero: false
+                    }
+                }
+            });
+
+            // Initialize real motor RPM chart
+            initializeChart('real-rpm-chart', 'Drehzahlverlauf über die Zeit', [
+                { label: 'Drehzahl (U/min)', borderColor: 'rgb(54, 162, 235)' }
+            ], {
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Drehzahl (U/min)' },
+                        beginAtZero: false
+                    }
+                }
+            });
+            // Initialize real motor vibration chart
+            initializeChart('real-vibration-chart', 'Vibrationsverlauf über die Zeit', [
+                { label: 'Vibration (mm/s)', borderColor: 'rgb(255, 205, 86)' }
+            ], {
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Vibration (mm/s)' },
+                        beginAtZero: false
+                    }
+                }
+            });
+            // Initialize real motor temperature chart
+            initializeChart('real-temp-chart', 'Temperaturverlauf über die Zeit', [
+                { label: 'Temperatur (°C)', borderColor: 'rgb(153, 102, 255)' }
+            ], {
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Temperatur (°C)' },
+                        beginAtZero: false
+                    }
+                }
+            });
+
+            // Initialize digital twin current and voltage chart with dashed lines
+            initializeChart('dt-current-voltage-chart', 'Strom- und Spannungsverlauf über die Zeit (Modell)', [
+                { label: 'Strom (A) - Modell', borderColor: 'rgb(75, 192, 192)', borderDash: [5, 5], yAxisID: 'y1' },
+                { label: 'Spannung (V) - Modell', borderColor: 'rgb(255, 99, 132)', borderDash: [5, 5], yAxisID: 'y2' }
+            ], {
+                scales: {
+                    y1: {
+                        position: 'left',
+                        title: { display: true, text: 'Strom (A)' },
+                        beginAtZero: false
+                    },
+                    y2: {
+                        position: 'right',
+                        title: { display: true, text: 'Spannung (V)' },
+                        grid: { drawOnChartArea: false },
+                        beginAtZero: false
+                    }
+                }
+            });
+
+            // Initialize digital twin RPM chart with dashed lines
+            initializeChart('dt-rpm-chart', 'Drehzahlverlauf über die Zeit (Modell)', [
+                { label: 'Drehzahl (U/min) - Modell', borderColor: 'rgb(54, 162, 235)', borderDash: [5, 5] }
+            ], {
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Drehzahl (U/min)' },
+                        beginAtZero: false
+                    }
+                }
+            });
+            // Initialize digital twin vibration chart with dashed lines
+            initializeChart('dt-vibration-chart', 'Vibrationsverlauf über die Zeit (Modell)', [
+                { label: 'Vibration (mm/s) - Modell', borderColor: 'rgb(255, 205, 86)', borderDash: [5, 5] }
+            ], {
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Vibration (mm/s)' },
+                        beginAtZero: false
+                    }
+                }
+            });
+            // Initialize digital twin temperature chart with dashed lines
+            initializeChart('dt-temp-chart', 'Temperaturverlauf über die Zeit (Modell)', [
+                { label: 'Temperatur (°C) - Modell', borderColor: 'rgb(153, 102, 255)', borderDash: [5, 5] }
+            ], {
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Temperatur (°C)' },
+                        beginAtZero: false
+                    }
+                }
+            });
+        });
+
+        // WebSocket onopen event handler
+        socket.onopen = function(e) {
+            console.log("WebSocket connection established.");
+        };
+
+        // WebSocket onmessage event handler
+        socket.onmessage = function(e) {
+            try {
+                const data = JSON.parse(e.data); // Parse incoming JSON data
+
+                // Handle different types of WebSocket messages
+                if (data.error) {
+                    console.error("[ERROR] Received error from WebSocket:", data.error);
+                    document.getElementById('anomaly-status').textContent = `Fehler: ${data.error}`;
+                    document.getElementById('anomaly-status').className = 'anomaly-status anomaly-alert';
+                } else if (data.type === 'dashboard_update') {
+                    // Update static UI elements with latest dashboard data
+                    updateUI(data.message);
+                } else if (data.type === 'plot_data_update') {
+                    // Update charts with historical data
+                    updateChartsWithHistoricalData(data.data, data.plot_type, data.start_time, data.end_time);
+                    // Adjust manualTimeRangeActive flag based on plot_type
+                    if (data.plot_type === 'initial_historical') {
+                        document.getElementById('plot-start-time').value = data.start_time ? new Date(data.start_time).toISOString().slice(0, 19) : '';
+                        document.getElementById('plot-end-time').value = data.end_time ? new Date(data.end_time).toISOString().slice(0, 19) : '';
+                        manualTimeRangeActive = false; // Back to live mode
+                    } else if (data.plot_type === 'historical_range') {
+                        manualTimeRangeActive = true; // Stay in manual range mode
+                    }
+                } else if (data.type === 'plot_data_point') {
+                    // Add new live data point if not in manual time range mode
+                    if (!manualTimeRangeActive) {
+                        addLatestDataPoint(data.data);
+                    }
+                } else {
+                    console.warn("[WARN] Unhandled WebSocket message type:", data.type);
+                }
+            } catch (error) {
+                console.error("[CRITICAL ERROR] Error parsing WebSocket message or during UI update:", error, e.data);
+            }
+        };
+
+        // WebSocket onclose event handler
+        socket.onclose = function(e) {
+            console.error("WebSocket closed unexpectedly:", e);
+            document.getElementById('anomaly-status').textContent = "WebSocket-Verbindung getrennt. Versuche verbindung...";
+            document.getElementById('anomaly-status').className = 'anomaly-status anomaly-alert';
+            // Attempt to reload the page after a delay to re-establish connection
+            setTimeout(() => {
+                window.location.reload();
+            }, 3000);
+        };
+
+        // WebSocket onerror event handler
+        socket.onerror = function(e) {
+            console.error("WebSocket error:", e);
+            document.getElementById('anomaly-status').textContent = "WebSocket-Fehler aufgetreten.";
+            document.getElementById('anomaly-status').className = 'anomaly-status anomaly-alert';
+        };
+
+        // Event listener for the "Apply" button in the time range selector
+        document.getElementById('apply-time-range').addEventListener('click', () => {
+            const startTimeInput = document.getElementById('plot-start-time').value;
+            const endTimeInput = document.getElementById('plot-end-time').value;
+
+            // Validate input
+            if (!startTimeInput && !endTimeInput) {
+                alert('Bitte geben Sie mindestens eine Start- oder Endzeit ein.');
+                return;
+            }
+
+            // Send a request to the WebSocket to fetch historical data for the specified range
+            socket.send(JSON.stringify({
+                type: 'request_plot_data',
+                start_time: startTimeInput,
+                end_time: endTimeInput
+            }));
+            manualTimeRangeActive = true; // Set flag to indicate manual time range is active
+        });
+
+        // Event listener for the "Show Current Run" button
+        document.getElementById('reset-time-range').addEventListener('click', () => {
+            // Clear the time range input fields
+            document.getElementById('plot-start-time').value = '';
+            document.getElementById('plot-end-time').value = '';
+            // Send a request to the WebSocket to revert to displaying initial/live data
+            socket.send(JSON.stringify({
+                type: 'request_initial_data'
+            }));
+            manualTimeRangeActive = false; // Reset flag to indicate live mode
+        });
+    </script>
+</body>
+</html>

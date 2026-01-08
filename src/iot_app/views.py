@@ -1,0 +1,73 @@
+# IOT_PROJECT/src/iot_app/views.py
+from django.shortcuts import render, get_object_or_404, redirect
+from django.utils import timezone
+from .models import MotorInfo, LiveData, TwinData, MalfunctionLog
+
+def dashboard_view(request):
+    """
+    Renders the IoT dashboard for the single motor, displaying live and twin data.
+    """
+    # Since there is only one motor, we simply retrieve the first (and only) motor
+    motor = MotorInfo.objects.first()
+    if not motor:
+        # Optional: Error page or instructions to create a motor in the admin
+        return render(request, 'iot_app/no_motor_configured.html', {'message': 'Please configure a motor in the admin area first.'})
+
+    # Retrieve latest live data
+    latest_live_data = LiveData.objects.order_by('-timestamp').first()
+
+    # Retrieve latest twin data
+    latest_twin_data = TwinData.objects.order_by('-timestamp').first()
+
+    # Prepare live data for the template
+    real_motor_data = {
+        "Current": {"value": latest_live_data.current if latest_live_data else None, "unit": "A"},
+        "Voltage": {"value": latest_live_data.voltage if latest_live_data else None, "unit": "V"},
+        "RPM": {"value": latest_live_data.rpm if latest_live_data else None, "unit": "RPM"},
+        "Torque": {"value": latest_live_data.torque if latest_live_data else None, "unit": "Nm"},
+        "Run_Time": {"value": latest_live_data.run_time if latest_live_data else None, "unit": "h"},
+    }
+
+    # Prepare digital twin data for the template
+    digital_twin_data = {
+        "Current": {"value": latest_twin_data.current if latest_twin_data else None, "unit": "A"},
+        "Voltage": {"value": latest_twin_data.voltage if latest_twin_data else None, "unit": "V"},
+        "RPM": {"value": latest_twin_data.rpm if latest_twin_data else None, "unit": "RPM"},
+        "Torque": {"value": latest_twin_data.torque if latest_twin_data else None, "unit": "Nm"},
+        "Run_Time": {"value": latest_twin_data.run_time if latest_twin_data else None, "unit": "h"},
+    }
+
+    # Simple anomaly status (can be expanded)
+    anomaly_detected = False
+    anomaly_message = "Motor running normally."
+    if latest_live_data and latest_twin_data:
+        if latest_live_data.current is not None and latest_twin_data.current is not None and \
+           abs(latest_live_data.current - latest_twin_data.current) > 5.0: # Example threshold
+            anomaly_detected = True
+            anomaly_message = "WARNING: Current deviation detected!"
+
+    anomaly_status = {
+        "detected": anomaly_detected,
+        "message": anomaly_message,
+    }
+
+    context = {
+        'motor_info': motor,
+        'real_motor_data': real_motor_data,
+        'digital_twin_data': digital_twin_data,
+        'anomaly_status': anomaly_status,
+        'current_year': timezone.now().year,
+    }
+
+    return render(request, 'iot_app/dashboard.html', context)
+
+def malfunction_log_view(request):
+    """
+    Displays the malfunction logs for the motor.
+    """
+    logs = MalfunctionLog.objects.all().order_by('-timestamp')[:100]
+    context = {
+        'malfunction_logs': logs,
+        'current_year': timezone.now().year,
+    }
+    return render(request, 'iot_app/malfunction_log.html', context)
