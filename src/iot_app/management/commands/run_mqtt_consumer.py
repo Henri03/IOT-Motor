@@ -5,7 +5,7 @@ from django.conf import settings
 from django.utils import timezone
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
-from iot_app.models import MotorInfo, LiveData, TwinData, MalfunctionLog # GEÄNDERT: MotorInfo importiert
+from iot_app.models import MotorInfo, LiveData, TwinData, MalfunctionLog 
 from asgiref.sync import sync_to_async
 import traceback
 from datetime import datetime
@@ -14,9 +14,6 @@ import asyncio
 class Command(BaseCommand):
     help = 'Startet einen MQTT-Consumer, um Sensordaten zu empfangen und in der Datenbank zu speichern.'
 
-    # NEU: Speichert den letzten Anomalie-Status pro Metrik.
-    # Dies wird verwendet, um zu erkennen, wann eine Anomalie beginnt oder endet.
-    # Beispiel: {'current': False, 'voltage': True, ...}
     last_anomaly_state = {}
 
     def add_arguments(self, parser):
@@ -40,17 +37,13 @@ class Command(BaseCommand):
         topic_malfunction_error = options['topic_malfunction_error']
         self.deviation_threshold = options['deviation_threshold']
 
-        # NEU: Initialisiere last_anomaly_state für die zu vergleichenden Metriken
-        # Dies stellt sicher, dass beim ersten Durchlauf keine "Anomaly resolved" Meldungen kommen.
         metrics_to_compare = ['current', 'voltage', 'rpm', 'vibration', 'temp', 'torque']
         for metric_name in metrics_to_compare:
-            self.last_anomaly_state[metric_name] = False # Anfangs keine Anomalie
+            self.last_anomaly_state[metric_name] = False 
 
         self.stdout.write(self.style.SUCCESS(f"Starte MQTT-Consumer für den Motor"))
         self.stdout.write(self.style.SUCCESS(f"Verbinde mit MQTT-Broker: {broker_address}:{port}"))
         self.stdout.write(self.style.SUCCESS(f"Abonniere Live-Daten-Topic: {topic_live}"))
-        # HINWEIS: client.subscribe(topic_twin) etc. gehören in die _on_connect Methode, nicht hier.
-        # Ich habe das in der _on_connect Methode korrigiert.
         self.stdout.write(self.style.SUCCESS(f"Abonniere Twin-Daten-Topic: {topic_twin}"))
         self.stdout.write(self.style.SUCCESS(f"Abonniere Malfunction-Info-Topic: {topic_malfunction_info}"))
         self.stdout.write(self.style.SUCCESS(f"Abonniere Malfunction-Warning-Topic: {topic_malfunction_warning}"))
@@ -66,12 +59,12 @@ class Command(BaseCommand):
             'topic_malfunction_info': topic_malfunction_info,
             'topic_malfunction_warning': topic_malfunction_warning,
             'topic_malfunction_error': topic_malfunction_error,
-            'command_instance': self # Übergib die Command-Instanz, um stdout/stderr zu verwenden
+            'command_instance': self 
         })
 
         try:
             client.connect(broker_address, port, 60)
-            client.loop_forever() # Blockiert und verarbeitet Nachrichten
+            client.loop_forever() 
         except Exception as e:
             self.stderr.write(self.style.ERROR(f"MQTT-Verbindungsfehler: {e}"))
             self.stderr.write(self.style.ERROR("Stellen Sie sicher, dass der MQTT-Broker (z.B. Mosquitto) läuft und erreichbar ist."))
@@ -100,31 +93,21 @@ class Command(BaseCommand):
             payload = json.loads(msg.payload.decode())
             command_instance.stdout.write(f"DEBUG: Nachricht auf Topic {msg.topic} empfangen: {payload}")
 
-            # MotorInfo ist hier nicht direkt für Zähleraktualisierung notwendig,
-            # da wir die Zähler aus MalfunctionLog ableiten.
-            # Dennoch ist es gut, MotorInfo zu haben, falls andere Motor-spezifische
-            # Daten benötigt werden (z.B. Name, Modell für die Dashboard-Anzeige).
             motor = MotorInfo.objects.first()
             if not motor:
                 command_instance.stderr.write(command_instance.style.ERROR("Kein Motor in der Datenbank gefunden. Bitte im Admin-Bereich erstellen."))
 
             if msg.topic == topic_live:
                 self._save_live_data(payload)
-                # NEU: Sende spezifische Notification für neuen Live-Datenpunkt
                 async_to_sync(self._notify_dashboard_group)("plot_data_point")
             elif msg.topic == topic_twin:
                 self._save_twin_data(payload)
-                # NEU: Sende spezifische Notification für neuen Twin-Datenpunkt
                 async_to_sync(self._notify_dashboard_group)("plot_data_point")
             elif msg.topic == topic_malfunction_info or \
                  msg.topic == topic_malfunction_warning or \
                  msg.topic == topic_malfunction_error:
                 self._save_malfunction_log(payload)
                 
-              
-            
-            # GEÄNDERT: Rufe die zentrale Verarbeitungs- und Benachrichtigungsfunktion auf
-            # Diese Funktion sendet das allgemeine 'dashboard_update' und behandelt Anomalien.
             async_to_sync(self._process_and_notify_dashboard)(
                 command_instance.deviation_threshold,
                 command_instance.last_anomaly_state,
@@ -136,25 +119,22 @@ class Command(BaseCommand):
             command_instance.stderr.write(command_instance.style.ERROR(f"An error occurred while processing MQTT message: {e}"))
             traceback.print_exc()
 
-    # ENTFERNT: _increment_motor_count und _perform_increment, da wir keine DB-Felder aktualisieren.
-
-    # NEU: Hilfsfunktion zum Senden an den Channels Layer
+    
+    #  Hilfsfunktion zum Senden an den Channels Layer
     async def _notify_dashboard_group(self, message_type, data=None):
         channel_layer = get_channel_layer()
         if channel_layer:
             await channel_layer.group_send(
-                "iot_dashboard_group", # GEÄNDERT: Verwenden deines Gruppennamens
+                "iot_dashboard_group", 
                 {
-                    "type": "dashboard_message", # Methode im Consumer, die die Nachricht empfängt
-                    "message_type": message_type, # NEU: Expliziter message_type
-                    "data": data, # NEU: Daten im 'data'-Feld
+                    "type": "dashboard_message", 
+                    "message_type": message_type, 
+                    "data": data,
                 }
             )
-            # print(f"DEBUG: Notified iot_dashboard_group: {message_type}") # Debugging
         else:
             print("WARNING: Channel layer not available. Cannot notify dashboard.")
 
-    # GEÄNDERT: Umbenannt und angepasst, um spezifische Plot-Notifications zu senden
     async def _process_and_notify_dashboard(self, deviation_threshold, last_anomaly_state):
         """
         Ruft die neuesten Dashboard-Daten ab, aktualisiert den Anomalie-Status,
@@ -163,17 +143,14 @@ class Command(BaseCommand):
         """
         channel_layer = get_channel_layer()
         
-        await asyncio.sleep(0.1) # Kleine Verzögerung für DB-Transaktionen
+        await asyncio.sleep(0.1) 
 
         motor = await sync_to_async(MotorInfo.objects.first)()
         if not motor:
             print("DEBUG: [MQTT_Consumer] Kein Motor gefunden, kann kein Dashboard-Update senden.")
-            # KEIN return hier, da wir trotzdem versuchen wollen, andere Daten zu senden
-            # und das Frontend mit "N/A" umgehen kann.
             retracted_count = "N/A"
             extended_count = "N/A"
         else:
-            # NEU: Zähler dynamisch aus MalfunctionLog ableiten
             retracted_count = await sync_to_async(MalfunctionLog.objects.filter(
                 description__icontains='motor fährt ein', message_type='INFO'
             ).count)()
@@ -187,12 +164,6 @@ class Command(BaseCommand):
         
         latest_malfunction_logs_for_display = await sync_to_async(list)(MalfunctionLog.objects.order_by('-timestamp')[:5].values())
 
-        # --- DEBUG START: Rohe Daten nach Abruf aus der DB ---
-        # print(f"DEBUG: [MQTT_Consumer] Fetched latest_live_data: {latest_live_data}")
-        # print(f"DEBUG: [MQTT_Consumer] Fetched latest_twin_data: {latest_twin_data}")
-        # print(f"DEBUG: [MQTT_Consumer] Fetched latest_malfunction_logs_for_display: {latest_malfunction_logs_for_display}")
-        # --- DEBUG END ---
-
         real_motor_data = {
             "Strom": {"value": latest_live_data.current if latest_live_data else None, "unit": "A"},
             "Spannung": {"value": latest_live_data.voltage if latest_live_data else None, "unit": "V"},
@@ -201,12 +172,11 @@ class Command(BaseCommand):
             "Temperatur": {"value": latest_live_data.temp if latest_live_data else None, "unit": "°C"},
             "Drehmoment": {"value": latest_live_data.torque if latest_live_data else None, "unit": "Nm"},
             "Laufzeit": {"value": latest_live_data.run_time if latest_live_data else None, "unit": "h"},
-            # NEU: Zähler für Live-Daten-Grid aus dynamisch abgeleiteten Werten
+            
             "Anzahl eingefahren": {"value": retracted_count, "unit": ""},
             "Anzahl ausgefahren": {"value": extended_count, "unit": ""},
         }
 
-        # GEÄNDERT: digital_twin_data verwendet jetzt latest_twin_data für Vibration und Temperatur
         digital_twin_data = {
             "Strom": {"value": latest_twin_data.current if latest_twin_data else None, "unit": "A"},
             "Spannung": {"value": latest_twin_data.voltage if latest_twin_data else None, "unit": "V"},
@@ -215,7 +185,6 @@ class Command(BaseCommand):
             "Temperatur": {"value": latest_twin_data.temp if latest_twin_data else None, "unit": "°C"},
             "Drehmoment": {"value": latest_twin_data.torque if latest_twin_data else None, "unit": "Nm"},
             "Laufzeit": {"value": latest_twin_data.run_time if latest_twin_data else None, "unit": "h"},
-            # NEU: Zähler für Digital-Twin-Daten-Grid (spiegeln die Live-Zähler wider)
             "Anzahl eingefahren": {"value": retracted_count, "unit": ""},
             "Anzahl ausgefahren": {"value": extended_count, "unit": ""},
         }
@@ -279,12 +248,6 @@ class Command(BaseCommand):
                 current_anomaly_detected = True
                 current_anomaly_message = f"KRITISCHE STÖRUNG: {error_logs[0]['description']}"
 
-        # --- DEBUG START: Konstruierte Daten (nach Formatierung) ---
-        # print(f"DEBUG: [MQTT_Consumer] Constructed real_motor_data: {real_motor_data}")
-        # print(f"DEBUG: [MQTT_Consumer] Constructed digital_twin_data: {digital_twin_data}")
-        # print(f"DEBUG: [MQTT_Consumer] Constructed anomaly_status: {{'detected': {current_anomaly_detected}, 'message': '{current_anomaly_message}'}}")
-        # --- DEBUG END ---
-
         message_to_send = {
             'real_motor_data': real_motor_data,
             'digital_twin_data': digital_twin_data,
@@ -297,22 +260,16 @@ class Command(BaseCommand):
 
         serializable_message_data = _to_serializable_dict(message_to_send)
 
-        # --- DEBUG START: Finale Nachricht vor dem Senden ---
-        # print(f"DEBUG: [MQTT_Consumer] Final message_to_send (keys): {serializable_message_data.keys()}")
-        # print(f"DEBUG: [MQTT_Consumer] Final message_to_send (digital_twin_data values): {serializable_message_data['digital_twin_data']}")
-        # print(f"DEBUG: [MQTT_Consumer] Final message_to_send (anomaly_status message): {serializable_message_data['anomaly_status']['message']}")
-        # --- DEBUG END ---
-
         try:
             await channel_layer.group_send(
-                "iot_dashboard_group", # GEÄNDERT: Verwenden deines Gruppennamens
+                "iot_dashboard_group", 
                 {
                     'type': 'dashboard_message',
-                    'message_type': 'dashboard_update', # NEU: Expliziter message_type für allgemeine Dashboard-Updates
-                    'data': serializable_message_data # NEU: Daten im 'data'-Feld
+                    'message_type': 'dashboard_update', 
+                    'data': serializable_message_data 
                 }
             )
-            # print("DEBUG: [MQTT_Consumer] Nachricht 'dashboard_update' erfolgreich an Channel Layer gesendet.")
+
         except Exception as e:
             print(f"DEBUG: [MQTT_Consumer] Fehler beim Senden des Dashboard-Updates an Channel Layer: {e}")
 

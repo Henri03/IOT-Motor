@@ -65,20 +65,20 @@ services:
       - TZ=Europe/Berlin
     restart: unless-stopped
 
-  dummy_data_publisher:
-    build: .
-    command: python scripts/dummy_data_publisher.py
-    volumes:
-      - ./src:/app
-      - /etc/localtime:/etc/localtime:ro
-      - /etc/timezone:/etc/timezone:ro
-    environment:
-      - TZ=Europe/Berlin
-    env_file:
-      - .env
-    depends_on:
-      - mqtt_broker
-    restart: unless-stopped
+  #dummy_data_publisher:
+  #  build: .
+  #  command: python scripts/dummy_data_publisher.py
+  #  volumes:
+  #    - ./src:/app
+  #    - /etc/localtime:/etc/localtime:ro
+  #    - /etc/timezone:/etc/timezone:ro
+  #  environment:
+  #    - TZ=Europe/Berlin
+  #  env_file:
+  #    - .env
+  #  depends_on:
+  #    - mqtt_broker
+  #  restart: unless-stopped
 
   mqtt_consumer:
     build: .

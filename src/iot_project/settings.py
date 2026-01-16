@@ -57,15 +57,16 @@ DATABASES = {
     }
 }
 
-# --- Debugging output for database settings ---
-# This print statement will write the actual DB settings to the logs
+
 print(f"DEBUG: Database settings being used: {DATABASES['default']}", file=sys.stderr)
-# --- End Debugging output ---
+
 
 # URL for static files
 STATIC_URL = '/static/'
+
 # Directory where static files will be collected for deployment
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
 # Additional directories to search for static files
 STATICFILES_DIRS = [BASE_DIR / 'iot_app' / 'static']
 
@@ -74,6 +75,7 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # URL for media files
 MEDIA_URL = '/media/'
+
 # Directory where uploaded media files will be stored
 MEDIA_ROOT = BASE_DIR / 'media'
 
@@ -115,12 +117,18 @@ CHANNEL_LAYERS = {
 }
 
 # MQTT Broker Host for external connections (e.g., from your local machine or another Pi)
-MQTT_BROKER_HOST = os.environ.get('MQTT_BROKER_HOST', 'localhost')
+DOCKER_MQTT_BROKER_HOST = "192.168.0.20"
+
 # MQTT Broker Port
-MQTT_BROKER_PORT = int(os.getenv('MQTT_BROKER_PORT', '1883'))
+MQTT_BROKER_PORT = 1883
 
 # MQTT Broker Host for internal Docker communication (service name of the MQTT broker in the Docker network)
-DOCKER_MQTT_BROKER_HOST = os.environ.get('DOCKER_MQTT_BROKER_HOST', 'mqtt_broker')
+#DOCKER_MQTT_BROKER_HOST = os.environ.get('DOCKER_MQTT_BROKER_HOST', 'mqtt_broker')
+
+print(
+    f"DEBUG MQTT BROKER: {DOCKER_MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}",
+    file=sys.stderr
+)
 
 # MQTT Topics for different data streams
 MQTT_TOPIC_LIVE = os.environ.get('MQTT_TOPIC_LIVE', 'iot/motor/live')
@@ -128,6 +136,7 @@ MQTT_TOPIC_TWIN = os.environ.get('MQTT_TOPIC_TWIN', 'iot/motor/twin')
 MQTT_TOPIC_MALFUNCTION_INFO = os.environ.get('MQTT_TOPIC_MALFUNCTION_INFO', 'iot/motor/malfunction/info')
 MQTT_TOPIC_MALFUNCTION_WARNING = os.environ.get('MQTT_TOPIC_MALFUNCTION_WARNING', 'iot/motor/malfunction/warning')
 MQTT_TOPIC_MALFUNCTION_ERROR = os.environ.get('MQTT_TOPIC_MALFUNCTION_ERROR', 'iot/motor/malfunction/error')
+
 # Default percentage deviation threshold between live and twin data that triggers a warning
 MQTT_DEVIATION_THRESHOLD_PERCENT = 80.0
 
