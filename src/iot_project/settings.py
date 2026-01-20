@@ -117,13 +117,15 @@ CHANNEL_LAYERS = {
 }
 
 # MQTT Broker Host for external connections 
-DOCKER_MQTT_BROKER_HOST = "192.168.0.20"
+#DOCKER_MQTT_BROKER_HOST = "192.168.0.20"
+
+# MQTT Broker Host for internal Docker communication 
+DOCKER_MQTT_BROKER_HOST = os.environ.get('DOCKER_MQTT_BROKER_HOST', 'mqtt_broker')
 
 # MQTT Broker Port
 MQTT_BROKER_PORT = 1883
 
-# MQTT Broker Host for internal Docker communication 
-#DOCKER_MQTT_BROKER_HOST = os.environ.get('DOCKER_MQTT_BROKER_HOST', 'mqtt_broker')
+
 
 print(
     f"DEBUG MQTT BROKER: {DOCKER_MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}",

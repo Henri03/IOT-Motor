@@ -4,12 +4,30 @@ import json
 import random
 import datetime
 import os
+import statistics
 
 # MQTT Broker settings
 BROKER_ADDRESS = os.getenv('DOCKER_MQTT_BROKER_HOST', 'localhost')
 BROKER_PORT = int(os.getenv('MQTT_BROKER_PORT', '1883'))
+
+# --- MQTT Topics ---
 TOPIC_LIVE = "iot/motor/live"
 TOPIC_TWIN = "iot/motor/twin"
+
+# Raw Data Topics (matching consumer's expected topics)
+TOPIC_RAW_TEMPERATURE = "raw/temperature"
+TOPIC_RAW_CURRENT = "raw/current"
+TOPIC_RAW_TORQUE = "raw/torque"
+
+# Feature Data Topics
+TOPIC_FEATURE_TEMPERATURE = "feature/temperature"
+TOPIC_FEATURE_CURRENT = "feature/current"
+TOPIC_FEATURE_TORQUE = "feature/torque"
+
+# Prediction Data Topics
+TOPIC_PREDICTION_TEMPERATURE = "prediction/temperature"
+TOPIC_PREDICTION_CURRENT = "prediction/current"
+TOPIC_PREDICTION_TORQUE = "prediction/torque"
 
 def generate_live_data():
     """Generates realistic live sensor data."""
@@ -102,6 +120,58 @@ def generate_twin_data(live_data_payload):
     }
     return data
 
+def generate_feature_data(metric_value):
+    """
+    Generates dummy feature data based on a single metric value.
+    This simulates a window of data being processed to extract features.
+    """
+    # Create a dummy window of values around the current metric_value
+    # For a more realistic scenario, you'd collect actual historical data
+    # and calculate features from that.
+    window_size = 10
+    # Ensure values are within a reasonable range for the metric
+    # For example, temperature features should not be negative
+    dummy_data_window = [max(0.0, metric_value + random.uniform(-2, 2)) for _ in range(window_size)]
+    
+    mean_val = statistics.mean(dummy_data_window)
+    min_val = min(dummy_data_window)
+    max_val = max(dummy_data_window)
+    median_val = statistics.median(dummy_data_window)
+    std_dev_val = statistics.stdev(dummy_data_window) if window_size > 1 else 0.0
+    range_val = max_val - min_val
+
+    features = {
+        "mean": round(mean_val, 3), # Round to 3 decimal places for more precision
+        "min": round(min_val, 2),
+        "max": round(max_val, 2),
+        "median": round(median_val, 2),
+        "std": round(std_dev_val, 16), # Standard deviation can be quite precise
+        "range": round(range_val, 2),
+    }
+    return features
+
+def generate_prediction_data(metric_value):
+    """
+    Generates dummy prediction data based on a single metric value.
+    This simulates a model predicting future values or anomaly scores.
+    """
+    # Simple prediction: a slight deviation from the current value
+    predicted_value = round(metric_value * (1 + random.uniform(-0.02, 0.02)), 2)
+    
+    # Dummy anomaly score (0-1, where 1 is high anomaly)
+    anomaly_score = round(random.uniform(0.01, 0.99), 2)
+    
+    # Dummy prediction of remaining useful life (in hours)
+    rul = round(random.uniform(100, 5000), 0)
+
+    prediction = {
+        "predicted_value": predicted_value,
+        "anomaly_score": anomaly_score,
+        "rul_hours": rul,
+        "timestamp": datetime.datetime.now().isoformat(),
+    }
+    return prediction
+
 def on_connect(client, userdata, flags, rc):
     """Callback function for MQTT connection."""
     if rc == 0:
@@ -116,10 +186,11 @@ def publish_data():
     client.connect(BROKER_ADDRESS, BROKER_PORT, 60)
     client.loop_start()
 
-    print(f"Publishing dummy data to {TOPIC_LIVE} and {TOPIC_TWIN} for the motor...")
+    print(f"Publishing dummy data to {TOPIC_LIVE}, {TOPIC_TWIN}, raw, feature, and prediction topics for the motor...")
 
     try:
         while True:
+            # Generate Live and Twin Data
             live_data_payload = generate_live_data()
             twin_data_payload = generate_twin_data(live_data_payload)
 
@@ -129,7 +200,53 @@ def publish_data():
             client.publish(TOPIC_TWIN, json.dumps(twin_data_payload))
             print(f"Published Twin Data: {twin_data_payload}")
 
-            time.sleep(0.5)
+            # Extract relevant values for Raw Data
+            raw_temp = live_data_payload.get('temp')
+            raw_current = live_data_payload.get('current')
+            raw_torque = live_data_payload.get('torque')
+            
+            current_timestamp = datetime.datetime.now().isoformat()
+
+            # Publish Raw Data
+            if raw_temp is not None:
+                client.publish(TOPIC_RAW_TEMPERATURE, json.dumps({"timestamp": current_timestamp, "value": raw_temp}))
+                print(f"Published Raw Temperature: {raw_temp}")
+            if raw_current is not None:
+                client.publish(TOPIC_RAW_CURRENT, json.dumps({"timestamp": current_timestamp, "value": raw_current}))
+                print(f"Published Raw Current: {raw_current}")
+            if raw_torque is not None:
+                client.publish(TOPIC_RAW_TORQUE, json.dumps({"timestamp": current_timestamp, "value": raw_torque}))
+                print(f"Published Raw Torque: {raw_torque}")
+
+            # Publish Feature Data (using live data values as a base for feature calculation)
+            if raw_temp is not None:
+                feature_temp_payload = generate_feature_data(raw_temp)
+                client.publish(TOPIC_FEATURE_TEMPERATURE, json.dumps(feature_temp_payload))
+                print(f"Published Feature Temperature: {feature_temp_payload}")
+            if raw_current is not None:
+                feature_current_payload = generate_feature_data(raw_current)
+                client.publish(TOPIC_FEATURE_CURRENT, json.dumps(feature_current_payload))
+                print(f"Published Feature Current: {feature_current_payload}")
+            if raw_torque is not None:
+                feature_torque_payload = generate_feature_data(raw_torque)
+                client.publish(TOPIC_FEATURE_TORQUE, json.dumps(feature_torque_payload))
+                print(f"Published Feature Torque: {feature_torque_payload}")
+
+            # Publish Prediction Data (using live data values as a base for prediction)
+            if raw_temp is not None:
+                prediction_temp_payload = generate_prediction_data(raw_temp)
+                client.publish(TOPIC_PREDICTION_TEMPERATURE, json.dumps(prediction_temp_payload))
+                print(f"Published Prediction Temperature: {prediction_temp_payload}")
+            if raw_current is not None:
+                prediction_current_payload = generate_prediction_data(raw_current)
+                client.publish(TOPIC_PREDICTION_CURRENT, json.dumps(prediction_current_payload))
+                print(f"Published Prediction Current: {prediction_current_payload}")
+            if raw_torque is not None:
+                prediction_torque_payload = generate_prediction_data(raw_torque)
+                client.publish(TOPIC_PREDICTION_TORQUE, json.dumps(prediction_torque_payload))
+                print(f"Published Prediction Torque: {prediction_torque_payload}")
+
+            time.sleep(0.5) # Publish every 0.5 seconds
     except KeyboardInterrupt:
         print("Publisher stopped.")
     finally:
