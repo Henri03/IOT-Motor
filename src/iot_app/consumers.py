@@ -138,12 +138,19 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         Determines the current plot time window and sends the corresponding historical data.
         """
         start_time, end_time = await self._get_active_run_time_window()
+    
         await self.send_plot_data(start_time, end_time, plot_type='initial_historical')
 
-    async def send_plot_data(self, start_time, end_time, plot_type='historical_range'):
+    async def send_plot_data(self, start_time=None, end_time=None, plot_type='initial_historical'):
         """
         Fetches plot data for a given period and sends it to the client.
+        If start_time and end_time are not provided, it determines the active run time window.
         """
+        if start_time is None or end_time is None:
+            # If no specific time range is provided, get the active run time window
+            start_time, end_time = await self._get_active_run_time_window()
+            plot_type = 'initial_historical' # Set plot_type for this case
+
         plot_data = await self._get_plot_data(start_time, end_time)
         await self.send(text_data=json.dumps({
             'type': 'plot_data_update',
@@ -151,14 +158,4 @@ class DashboardConsumer(AsyncWebsocketConsumer):
             'data': plot_data,
             'start_time': start_time.isoformat() if start_time else None,
             'end_time': end_time.isoformat() if end_time else None,
-        }))
-
-    async def send_latest_plot_data_point(self):
-        """
-        Sends the very latest data point for live plot updates.
-        """
-        latest_data_point = await self._get_latest_plot_data_point()
-        await self.send(text_data=json.dumps({
-            'type': 'plot_data_point',
-            'data': latest_data_point
         }))
