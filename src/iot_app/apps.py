@@ -5,6 +5,5 @@ class IotAppConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'iot_app'
 
-    def ready(self):
-        import iot_app.signals   
+   
     

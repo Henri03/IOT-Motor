@@ -116,13 +116,13 @@ CHANNEL_LAYERS = {
     },
 }
 
-# MQTT Broker Host for external connections (e.g., from your local machine or another Pi)
+# MQTT Broker Host for external connections 
 DOCKER_MQTT_BROKER_HOST = "192.168.0.20"
 
 # MQTT Broker Port
 MQTT_BROKER_PORT = 1883
 
-# MQTT Broker Host for internal Docker communication (service name of the MQTT broker in the Docker network)
+# MQTT Broker Host for internal Docker communication 
 #DOCKER_MQTT_BROKER_HOST = os.environ.get('DOCKER_MQTT_BROKER_HOST', 'mqtt_broker')
 
 print(
@@ -131,8 +131,22 @@ print(
 )
 
 # MQTT Topics for different data streams
-MQTT_TOPIC_LIVE = os.environ.get('MQTT_TOPIC_LIVE', 'iot/motor/live')
+MQTT_TOPIC_LIVE = os.environ.get('MQTT_TOPIC_LIVE', 'iot/motor/live')           # erste Parameter 'MQTT_TOPIC_LIVE' ist der Name der Umgebungsvariablen, nach der gesucht wird.    
+                                                                                # zweite Parameter 'iot/motor/live' ist der Standardwert (Default-Wert)
 MQTT_TOPIC_TWIN = os.environ.get('MQTT_TOPIC_TWIN', 'iot/motor/twin')
+
+FEATURE_TOPIC_RAW_TEMPERATURE = "raw/temperature"
+FEATURE_TOPIC_RAW_CURRENT = "raw/current"
+FEATURE_TOPIC_RAW_TORQUE = "raw/torque"
+
+FEATURE_TOPIC_TEMPERATURE = "feature/temperature"
+FEATURE_TOPIC_CURRENT = "feature/current"
+FEATURE_TOPIC_TORQUE = "feature/torque"
+
+PREDICTION_TOPIC_TEMPERATURE = "prediction/temperature"
+PREDICTION_TOPIC_CURRENT = "prediction/current"
+PREDICTION_TOPIC_TORQUE = "prediction/torque"
+
 MQTT_TOPIC_MALFUNCTION_INFO = os.environ.get('MQTT_TOPIC_MALFUNCTION_INFO', 'iot/motor/malfunction/info')
 MQTT_TOPIC_MALFUNCTION_WARNING = os.environ.get('MQTT_TOPIC_MALFUNCTION_WARNING', 'iot/motor/malfunction/warning')
 MQTT_TOPIC_MALFUNCTION_ERROR = os.environ.get('MQTT_TOPIC_MALFUNCTION_ERROR', 'iot/motor/malfunction/error')

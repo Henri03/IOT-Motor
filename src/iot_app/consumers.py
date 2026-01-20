@@ -1,13 +1,19 @@
 # IOT_PROJECT/src/iot_app/consumers.py
-import json
-from channels.generic.websocket import AsyncWebsocketConsumer
-from asgiref.sync import sync_to_async
-from django.utils import timezone
+
+# Websocket
+# Definiert den DashboardConsumer, der für die Handhabung von WebSocket-Verbindungen für ein Echtzeit-Dashboard verantwortlich ist. 
+# Dieses Skript ermöglicht die bidirektionale Kommunikation zwischen dem Frontend (Webbrowser) und dem Backend (Django-Anwendung) über WebSockets, um Daten in Echtzeit anzuzeigen und zu aktualisieren.
+# Der DashboardConsumer ist eine zentrale Komponente für die Bereitstellung eines interaktiven und dynamischen Dashboards.
+
+import json                                                                                 # Serialisierung und Deserialisierung von Daten im JSON-Format
+from channels.generic.websocket import AsyncWebsocketConsumer                               # grundlegende Struktur und Methoden für die WebSocket-Kommunikation
+from asgiref.sync import sync_to_async                                                      # synchrone Funktionen (wie Django ORM-Aufrufe) sicher in einem asynchronen Kontext auszuführen
+from django.utils import timezone                                                           
 from datetime import datetime
 
-from .models import MotorInfo, LiveData, TwinData, MalfunctionLog
-from .utils import get_dashboard_data
-from .utils import get_active_run_time_window, get_plot_data, get_latest_plot_data_point
+from .models import MotorInfo, LiveData, TwinData, MalfunctionLog                           # Importiert Django-Modelle, die die IOT-Anwendung definieren
+from .utils import get_dashboard_data                                                       # Hilfsfunktionen, die die Logik zum Abrufen und Verarbeiten von Daten aus der Datenbank kapseln
+from .utils import get_active_run_time_window, get_plot_data, get_latest_plot_data_point    # 
 
 class DashboardConsumer(AsyncWebsocketConsumer):
     """
@@ -16,21 +22,23 @@ class DashboardConsumer(AsyncWebsocketConsumer):
     """
 
     async def connect(self):
-        # Group name for the dashboard
-        self.group_name = "iot_dashboard_group"
-        await self.channel_layer.group_add(
+        
+        self.group_name = "iot_dashboard_group"                                             # Group name für das dashboard
+
+        await self.channel_layer.group_add(                                                 # Fügt den aktuellen Kanal des Consumers (die spezifische WebSocket-Verbindung) zur definierten Gruppe hinzu
             self.group_name,
             self.channel_name
         )
-        await self.accept()
+        await self.accept()                                                                 #  Akzeptiert die eingehende WebSocket-Verbindung. Ohne dies würde die Verbindung geschlossen.
+
         print(f"WebSocket connected: {self.channel_name} to group {self.group_name}")
 
-        # Send current panel data and initial plot data upon connection
-        await self.send_current_data()
-        await self.send_initial_plot_data()
+        await self.send_current_data()                                                      # Sendet die aktuellen Dashboard-Panel-Daten an den neu verbundenen Client.
+        await self.send_plot_data()                                                         # 
 
     async def disconnect(self, close_code):
         print(f"WebSocket disconnected: {self.channel_name}")
+
         await self.channel_layer.group_discard(
             self.group_name,
             self.channel_name
@@ -60,8 +68,8 @@ class DashboardConsumer(AsyncWebsocketConsumer):
 
                 await self.send_plot_data(start_time, end_time, plot_type='historical_range')
             elif message_type == 'request_initial_data':
-                # Frontend requests initial data (e.g., to reset plot time window)
-                await self.send_initial_plot_data()
+                # Frontend requests initial data 
+                await self.send_plot_data()
             else:
                 print(f"Unknown message type received from frontend: {message_type}")
 
@@ -89,7 +97,7 @@ class DashboardConsumer(AsyncWebsocketConsumer):
             await self.send_latest_plot_data_point()
         elif message_type == "plot_boundary_update":
             # A new plot boundary has been set, re-send historical data
-            await self.send_initial_plot_data()
+            await self.send_plot_data()
         elif message_type == "dashboard_update":
             # General dashboard update (panel data, anomaly status)
             await self.send(text_data=json.dumps({
@@ -125,7 +133,7 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         """Wrapper for get_latest_plot_data_point utility function."""
         return get_latest_plot_data_point()
 
-    async def send_initial_plot_data(self):
+    async def send_plot_data(self):
         """
         Determines the current plot time window and sends the corresponding historical data.
         """
