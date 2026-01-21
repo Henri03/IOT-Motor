@@ -120,3 +120,87 @@ class MalfunctionLog(models.Model):
         verbose_name = "Malfunction Log"
         verbose_name_plural = "Malfunction Logs"
         ordering = ['-timestamp']
+
+
+class RawData(models.Model):
+    """
+    Modell zur Speicherung von Rohdaten für spezifische Metriken.
+    """
+    METRIC_TYPE_CHOICES = [
+        ('temperature', 'Temperatur'),
+        ('current', 'Strom'),
+        ('torque', 'Drehmoment'),
+        # Weitere Metriken können hier hinzugefügt werden
+    ]
+    timestamp = models.DateTimeField(default=timezone.now, verbose_name="Zeitstempel")
+    metric_type = models.CharField(max_length=50, choices=METRIC_TYPE_CHOICES, verbose_name="Metrik-Typ")
+    value = models.FloatField(verbose_name="Wert")
+
+    def __str__(self):
+        return f"Raw Data ({self.metric_type}) - {self.value} at {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+
+    class Meta:
+        verbose_name = "Rohdaten"
+        verbose_name_plural = "Rohdaten"
+        ordering = ['-timestamp']
+        # Optional: Index für schnelle Abfragen nach Metrik-Typ und Zeitstempel
+        indexes = [
+            models.Index(fields=['metric_type', 'timestamp']),
+        ]
+
+class FeatureData(models.Model):
+    """
+    Modell zur Speicherung von extrahierten Feature-Daten für spezifische Metriken.
+    """
+    METRIC_TYPE_CHOICES = [
+        ('temperature', 'Temperatur'),
+        ('current', 'Strom'),
+        ('torque', 'Drehmoment'),
+        # Weitere Metriken können hier hinzugefügt werden
+    ]
+    timestamp = models.DateTimeField(default=timezone.now, verbose_name="Zeitstempel")
+    metric_type = models.CharField(max_length=50, choices=METRIC_TYPE_CHOICES, verbose_name="Metrik-Typ")
+    mean = models.FloatField(null=True, blank=True, verbose_name="Mittelwert")
+    min_val = models.FloatField(null=True, blank=True, verbose_name="Minimum") # 'min' ist ein reserviertes Wort in Python
+    max_val = models.FloatField(null=True, blank=True, verbose_name="Maximum") # 'max' ist ein reserviertes Wort in Python
+    median = models.FloatField(null=True, blank=True, verbose_name="Median")
+    std_dev = models.FloatField(null=True, blank=True, verbose_name="Standardabweichung") # 'std' ist ein reserviertes Wort
+    data_range = models.FloatField(null=True, blank=True, verbose_name="Bereich (Range)") # 'range' ist ein reserviertes Wort
+
+    def __str__(self):
+        return f"Feature Data ({self.metric_type}) - Mean: {self.mean} at {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+
+    class Meta:
+        verbose_name = "Feature-Daten"
+        verbose_name_plural = "Feature-Daten"
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['metric_type', 'timestamp']),
+        ]
+
+class PredictionData(models.Model):
+    """
+    Modell zur Speicherung von Vorhersagedaten für spezifische Metriken.
+    """
+    METRIC_TYPE_CHOICES = [
+        ('temperature', 'Temperatur'),
+        ('current', 'Strom'),
+        ('torque', 'Drehmoment'),
+        # Weitere Metriken können hier hinzugefügt werden
+    ]
+    timestamp = models.DateTimeField(default=timezone.now, verbose_name="Zeitstempel")
+    metric_type = models.CharField(max_length=50, choices=METRIC_TYPE_CHOICES, verbose_name="Metrik-Typ")
+    predicted_value = models.FloatField(null=True, blank=True, verbose_name="Vorhergesagter Wert")
+    anomaly_score = models.FloatField(null=True, blank=True, verbose_name="Anomalie-Score")
+    rul_hours = models.FloatField(null=True, blank=True, verbose_name="Restnutzungsdauer (h)")
+
+    def __str__(self):
+        return f"Prediction Data ({self.metric_type}) - Predicted: {self.predicted_value} at {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+
+    class Meta:
+        verbose_name = "Vorhersagedaten"
+        verbose_name_plural = "Vorhersagedaten"
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['metric_type', 'timestamp']),
+        ]

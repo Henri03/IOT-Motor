@@ -11,8 +11,8 @@ from asgiref.sync import sync_to_async                                          
 from django.utils import timezone                                                           
 from datetime import datetime
 
-from .models import MotorInfo, LiveData, TwinData, MalfunctionLog                           # Importiert Django-Modelle, die die IOT-Anwendung definieren
-from .utils import get_dashboard_data                                                       # Hilfsfunktionen, die die Logik zum Abrufen und Verarbeiten von Daten aus der Datenbank kapseln
+from .models import MotorInfo, LiveData, TwinData, MalfunctionLog, RawData, FeatureData, PredictionData # Importiert Django-Modelle, die die IOT-Anwendung definieren
+from .utils import get_dashboard_data, to_serializable_dict                                 # Hilfsfunktionen, die die Logik zum Abrufen und Verarbeiten von Daten aus der Datenbank kapseln
 from .utils import get_active_run_time_window, get_plot_data, get_latest_plot_data_point    # 
 
 class DashboardConsumer(AsyncWebsocketConsumer):
@@ -34,7 +34,7 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         print(f"WebSocket connected: {self.channel_name} to group {self.group_name}")
 
         await self.send_current_data()                                                      # Sendet die aktuellen Dashboard-Panel-Daten an den neu verbundenen Client.
-        await self.send_plot_data()                                                         # 
+        await self.send_plot_data()                                                         # Calls the single send_plot_data with default args
 
     async def disconnect(self, close_code):
         print(f"WebSocket disconnected: {self.channel_name}")
@@ -69,7 +69,7 @@ class DashboardConsumer(AsyncWebsocketConsumer):
                 await self.send_plot_data(start_time, end_time, plot_type='historical_range')
             elif message_type == 'request_initial_data':
                 # Frontend requests initial data 
-                await self.send_plot_data()
+                await self.send_plot_data() # Calls the single send_plot_data with default args
             else:
                 print(f"Unknown message type received from frontend: {message_type}")
 
@@ -78,9 +78,11 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         Fetches the latest motor and twin data and sends it to the client.
         """
         data = await self._get_latest_motor_data()
+        # Convert any remaining datetime objects to ISO strings before JSON serialization
+        serializable_data = to_serializable_dict(data) 
         await self.send(text_data=json.dumps({
             'type': 'dashboard_update',
-            'message': data
+            'message': serializable_data # Use the serializable data
         }))
 
     async def dashboard_message(self, event):
@@ -97,18 +99,20 @@ class DashboardConsumer(AsyncWebsocketConsumer):
             await self.send_latest_plot_data_point()
         elif message_type == "plot_boundary_update":
             # A new plot boundary has been set, re-send historical data
-            await self.send_plot_data()
+            await self.send_plot_data() # Calls the single send_plot_data with default args
         elif message_type == "dashboard_update":
             # General dashboard update (panel data, anomaly status)
+            serializable_data = to_serializable_dict(data)
             await self.send(text_data=json.dumps({
                 'type': 'dashboard_update',
-                'message': data
+                'message': serializable_data
             }))
         elif legacy_message:
             print(f"WARN: Received legacy dashboard message. Please update MQTT consumer to use 'message_type' and 'data'.")
+            serializable_legacy_message = to_serializable_dict(legacy_message)
             await self.send(text_data=json.dumps({
                 'type': 'dashboard_update',
-                'message': legacy_message
+                'message': serializable_legacy_message
             }))
         else:
             print(f"Unhandled dashboard_message type from channel layer: {message_type}. Full event: {event}")
@@ -133,14 +137,7 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         """Wrapper for get_latest_plot_data_point utility function."""
         return get_latest_plot_data_point()
 
-    async def send_plot_data(self):
-        """
-        Determines the current plot time window and sends the corresponding historical data.
-        """
-        start_time, end_time = await self._get_active_run_time_window()
-    
-        await self.send_plot_data(start_time, end_time, plot_type='initial_historical')
-
+    # This is the single, combined send_plot_data function
     async def send_plot_data(self, start_time=None, end_time=None, plot_type='initial_historical'):
         """
         Fetches plot data for a given period and sends it to the client.
@@ -152,10 +149,23 @@ class DashboardConsumer(AsyncWebsocketConsumer):
             plot_type = 'initial_historical' # Set plot_type for this case
 
         plot_data = await self._get_plot_data(start_time, end_time)
+        
+        serializable_plot_data = to_serializable_dict(plot_data)
         await self.send(text_data=json.dumps({
             'type': 'plot_data_update',
             'plot_type': plot_type,
-            'data': plot_data,
+            'data': serializable_plot_data,
             'start_time': start_time.isoformat() if start_time else None,
             'end_time': end_time.isoformat() if end_time else None,
+        }))
+
+    async def send_latest_plot_data_point(self):
+        """
+        Fetches the very latest plot data point and sends it to the client.
+        """
+        latest_data_point = await self._get_latest_plot_data_point()
+        serializable_data_point = to_serializable_dict(latest_data_point)
+        await self.send(text_data=json.dumps({
+            'type': 'plot_data_point_update', # A new type for single point updates
+            'data': serializable_data_point,
         }))

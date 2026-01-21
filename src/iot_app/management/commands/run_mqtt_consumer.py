@@ -6,7 +6,7 @@ from django.conf import settings
 from django.utils import timezone
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
-from iot_app.models import MotorInfo, LiveData, TwinData, MalfunctionLog
+from iot_app.models import MotorInfo, LiveData, TwinData, MalfunctionLog, RawData, FeatureData, PredictionData
 from asgiref.sync import sync_to_async
 import traceback
 from datetime import datetime
@@ -89,8 +89,8 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         self.stdout.write(self.style.SUCCESS(f"Abweichungsschwellenwert für Warnungen: {self.deviation_threshold}%"))
 
         client = mqtt.Client()
-        client.on_connect = self._on_connect
-        client.on_message = self._on_message
+        client.on_connect = async_to_sync(self._on_connect_async)
+        client.on_message = async_to_sync(self._on_message_async)
         client.user_data_set({
             'command_instance': self # speichert das aktuelle Command-Objekt (self) unter dem Schlüssel 'command_instance' in das userdata-Dictionary des MQTT-Clients
         })
@@ -102,7 +102,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             self.stderr.write(self.style.ERROR(f"MQTT-Verbindungsfehler: {e}"))
             self.stderr.write(self.style.ERROR("Stellen Sie sicher, dass der MQTT-Broker (Mosquitto) läuft und erreichbar ist."))
 
-    def _on_connect(self, client, userdata, flags, rc):
+    async def _on_connect_async(self, client, userdata, flags, rc):
         """
         Callback-Funktion, die aufgerufen wird, wenn der Client eine Verbindung zum Broker herstellt.
         Abonniert die konfigurierten MQTT-Topics.
@@ -128,7 +128,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         else:
             command_instance.stderr.write(command_instance.style.ERROR(f"Verbindung fehlgeschlagen, Rückgabecode {rc}"))
 
-    def _on_message(self, client, userdata, msg):
+    async def _on_message_async(self, client, userdata, msg):
         """
         Callback-Funktion, die aufgerufen wird, wenn eine Nachricht auf einem abonnierten Topic empfangen wird.
         Leitet die Nachricht an den entsprechenden Handler weiter.
@@ -137,49 +137,48 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         
         try:
             payload = json.loads(msg.payload.decode())
-            command_instance.stdout.write(f"DEBUG: Nachricht auf Topic {msg.topic} empfangen: {payload}")
+            #command_instance.stdout.write(f"DEBUG: Nachricht auf Topic {msg.topic} empfangen: {payload}")
 
             # Überprüfen, ob ein Motor in der Datenbank existiert
-            # Dies ist wichtig für die Anomalie-Erkennung und Dashboard-Updates
-            motor = MotorInfo.objects.first()
+            motor = await sync_to_async(MotorInfo.objects.first)()
             if not motor:
                 command_instance.stderr.write(command_instance.style.ERROR("Kein Motor in der Datenbank gefunden. Bitte im Admin-Bereich erstellen."))
                 return
 
             # --- Topic-basierte Nachrichtenverarbeitung ---
             if msg.topic == command_instance.topic_live:
-                command_instance._handle_live_data(payload)
+                await command_instance._handle_live_data(payload)
             elif msg.topic == command_instance.topic_twin:
-                command_instance._handle_twin_data(payload)
+                await command_instance._handle_twin_data(payload)
             elif msg.topic == command_instance.topic_malfunction_info:
-                command_instance._handle_malfunction_data(payload, 'INFO')
+                await command_instance._handle_malfunction_data(payload, 'INFO')
             elif msg.topic == command_instance.topic_malfunction_warning:
-                command_instance._handle_malfunction_data(payload, 'WARNING')
+                await command_instance._handle_malfunction_data(payload, 'WARNING')
             elif msg.topic == command_instance.topic_malfunction_error:
-                command_instance._handle_malfunction_data(payload, 'ERROR')
+                await command_instance._handle_malfunction_data(payload, 'ERROR')
             elif msg.topic == command_instance.topic_raw_temperature:
-                command_instance._handle_raw_data(payload, 'temperature')
+                await command_instance._handle_raw_data(payload, 'temperature')
             elif msg.topic == command_instance.topic_raw_current:
-                command_instance._handle_raw_data(payload, 'current')
+                await command_instance._handle_raw_data(payload, 'current')
             elif msg.topic == command_instance.topic_raw_torque:
-                command_instance._handle_raw_data(payload, 'torque')
+                await command_instance._handle_raw_data(payload, 'torque')
             elif msg.topic == command_instance.topic_feature_temperature:
-                command_instance._handle_feature_data(payload, 'temperature')
+                await command_instance._handle_feature_data(payload, 'temperature')
             elif msg.topic == command_instance.topic_feature_current:
-                command_instance._handle_feature_data(payload, 'current')
+                await command_instance._handle_feature_data(payload, 'current')
             elif msg.topic == command_instance.topic_feature_torque:
-                command_instance._handle_feature_data(payload, 'torque')
+                await command_instance._handle_feature_data(payload, 'torque')
             elif msg.topic == command_instance.topic_prediction_temperature:
-                command_instance._handle_prediction_data(payload, 'temperature')
+                await command_instance._handle_prediction_data(payload, 'temperature')
             elif msg.topic == command_instance.topic_prediction_current:
-                command_instance._handle_prediction_data(payload, 'current')
+                await command_instance._handle_prediction_data(payload, 'current')
             elif msg.topic == command_instance.topic_prediction_torque:
-                command_instance._handle_prediction_data(payload, 'torque')
+                await command_instance._handle_prediction_data(payload, 'torque')
             else:
                 command_instance.stdout.write(f"INFO: Unbekanntes Topic empfangen: {msg.topic}")
 
             # Nach jeder Nachricht die Dashboard-Anzeige aktualisieren und Anomalien prüfen
-            async_to_sync(command_instance._process_and_notify_dashboard)(
+            await command_instance._process_and_notify_dashboard(
                 command_instance.deviation_threshold,
                 command_instance.last_anomaly_state,
             )
@@ -190,64 +189,67 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             command_instance.stderr.write(command_instance.style.ERROR(f"Ein unerwarteter Fehler bei der Verarbeitung der MQTT-Nachricht auf Topic {msg.topic}: {e}"))
             traceback.print_exc()
 
-    def _handle_live_data(self, payload):
+    async def _handle_live_data(self, payload):
         """
         Verarbeitet Nachrichten vom Live-Daten-Topic.
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
-        self._save_live_data(payload)
-        async_to_sync(self._notify_dashboard_group)("plot_data_point")
+        await self._save_live_data(payload)
+        await self._notify_dashboard_group("plot_data_point")
         self.stdout.write(self.style.SUCCESS(f"Live-Daten gespeichert und Dashboard benachrichtigt."))
 
-    def _handle_twin_data(self, payload):
+    async def _handle_twin_data(self, payload):
         """
         Verarbeitet Nachrichten vom Twin-Daten-Topic.
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
-        self._save_twin_data(payload)
-        async_to_sync(self._notify_dashboard_group)("plot_data_point")
+        await self._save_twin_data(payload)                     # await, da _save_twin_data mit @sync_to_async dekoriert ist
+        await self._notify_dashboard_group("plot_data_point")   # await, da _notify_dashboard_group async ist
         self.stdout.write(self.style.SUCCESS(f"Twin-Daten gespeichert und Dashboard benachrichtigt."))
 
-    def _handle_malfunction_data(self, payload, topic_type):
+
+    async def _handle_malfunction_data(self, payload, topic_type):
         """
         Verarbeitet Nachrichten von den Malfunction-Topics (Info, Warning, Error).
         Speichert die Daten im MalfunctionLog.
         """
-        # Ergänze den message_type im Payload, falls nicht vorhanden
         if 'message_type' not in payload:
             payload['message_type'] = topic_type
-        self._save_malfunction_log(payload)
+        await self._save_malfunction_log(payload)               # await, da _save_malfunction_log mit @sync_to_async dekoriert ist
         self.stdout.write(self.style.WARNING(f"Störungsprotokoll ({topic_type}) gespeichert: {payload.get('description')}"))
 
-    def _handle_raw_data(self, payload, metric_type):
+    async def _handle_raw_data(self, payload, metric_type):
         """
         Verarbeitet Nachrichten von den Rohdaten-Topics.
         Aktuell: Nur Debug-Ausgabe und Dashboard-Benachrichtigung.
         """
-        self.stdout.write(self.style.SUCCESS(f"Rohdaten für {metric_type} empfangen: {payload}. Noch keine Speicherung."))
-        # Benachrichtigt das Dashboard, dass neue Daten angekommen sind (auch wenn sie noch nicht gespeichert werden)
+        await self._save_raw_data(payload, metric_type)         # await, da _save_raw_data mit @sync_to_async dekoriert ist
+        self.stdout.write(self.style.SUCCESS(f"Rohdaten für {metric_type} empfangen und gespeichert: {payload}."))
+
+        # Benachrichtigung des Dashboards erfolgt zentral in _process_and_notify_dashboard
         
 
-    def _handle_feature_data(self, payload, metric_type):
+    async def _handle_feature_data(self, payload, metric_type):
         """
         Verarbeitet Nachrichten von den Feature-Topics.
         Aktuell: Nur Debug-Ausgabe und Dashboard-Benachrichtigung.
         """
-        self.stdout.write(self.style.SUCCESS(f"Feature-Daten für {metric_type} empfangen: {payload}. Noch keine Speicherung."))
-        # Benachrichtigt das Dashboard, dass neue Daten angekommen sind (auch wenn sie noch nicht gespeichert werden)
+        await self._save_feature_data(payload, metric_type)     # await, da _save_feature_data mit @sync_to_async dekoriert ist
+        self.stdout.write(self.style.SUCCESS(f"Feature-Daten für {metric_type} empfangen und gespeichert: {payload}."))
+
+        # Benachrichtigung des Dashboards erfolgt zentral in _process_and_notify_dashboard
         
 
-    def _handle_prediction_data(self, payload, metric_type):
+    async def _handle_prediction_data(self, payload, metric_type):
         """
         Verarbeitet Nachrichten von den Vorhersage-Topics.
         Aktuell: Nur Debug-Ausgabe und Dashboard-Benachrichtigung.
         """
-        self.stdout.write(self.style.SUCCESS(f"Vorhersagedaten für {metric_type} empfangen: {payload}. Noch keine Speicherung."))
-        # Benachrichtigt das Dashboard, dass neue Daten angekommen sind (auch wenn sie noch nicht gespeichert werden)
+        await self._save_prediction_data(payload, metric_type) # await, da _save_prediction_data mit @sync_to_async dekoriert ist
+        self.stdout.write(self.style.SUCCESS(f"Vorhersagedaten für {metric_type} empfangen und gespeichert: {payload}."))
+
+        # Benachrichtigung des Dashboards erfolgt zentral in _process_and_notify_dashboard
         
-
-
-
 
     # --- Hilfsfunktionen für Datenbankoperationen und Channels-Kommunikation ---
 
@@ -299,6 +301,22 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         latest_live_data = await sync_to_async(LiveData.objects.order_by('-timestamp').first)()
         latest_twin_data = await sync_to_async(TwinData.objects.order_by('-timestamp').first)()
 
+        latest_raw_data = {
+            'temperature': await sync_to_async(RawData.objects.filter(metric_type='temperature').order_by('-timestamp').first)(),
+            'current': await sync_to_async(RawData.objects.filter(metric_type='current').order_by('-timestamp').first)(),
+            'torque': await sync_to_async(RawData.objects.filter(metric_type='torque').order_by('-timestamp').first)(),
+        }
+        latest_feature_data = {
+            'temperature': await sync_to_async(FeatureData.objects.filter(metric_type='temperature').order_by('-timestamp').first)(),
+            'current': await sync_to_async(FeatureData.objects.filter(metric_type='current').order_by('-timestamp').first)(),
+            'torque': await sync_to_async(FeatureData.objects.filter(metric_type='torque').order_by('-timestamp').first)(),
+        }
+        latest_prediction_data = {
+            'temperature': await sync_to_async(PredictionData.objects.filter(metric_type='temperature').order_by('-timestamp').first)(),
+            'current': await sync_to_async(PredictionData.objects.filter(metric_type='current').order_by('-timestamp').first)(),
+            'torque': await sync_to_async(PredictionData.objects.filter(metric_type='torque').order_by('-timestamp').first)(),
+        }
+
         # Nur die neuesten 5 Logs für die Anzeige abrufen
         latest_malfunction_logs_for_display = await sync_to_async(list)(
             MalfunctionLog.objects.order_by('-timestamp')[:5].values()
@@ -327,7 +345,30 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             "Anzahl eingefahren": {"value": retracted_count, "unit": ""}, 
             "Anzahl ausgefahren": {"value": extended_count, "unit": ""}, 
         }
-
+       # Daten für Raw, Feature, Prediction für das Dashboard aufbereiten
+        dashboard_raw_data = {
+            metric: {'value': getattr(data, 'value', None), 'timestamp': getattr(data, 'timestamp', None)}
+            for metric, data in latest_raw_data.items()
+        }
+        dashboard_feature_data = {
+            metric: {
+                'mean': getattr(data, 'mean', None),
+                'min': getattr(data, 'min_val', None),
+                'max': getattr(data, 'max_val', None),
+                'median': getattr(data, 'median', None),
+                'std': getattr(data, 'std_dev', None),
+                'range': getattr(data, 'data_range', None),
+                'timestamp': getattr(data, 'timestamp', None)
+            } for metric, data in latest_feature_data.items()
+        }
+        dashboard_prediction_data = {
+            metric: {
+                'predicted_value': getattr(data, 'predicted_value', None),
+                'anomaly_score': getattr(data, 'anomaly_score', None),
+                'rul_hours': getattr(data, 'rul_hours', None),
+                'timestamp': getattr(data, 'timestamp', None)
+            } for metric, data in latest_prediction_data.items()
+        }
         current_anomaly_detected = False
         current_anomaly_message = "Motor läuft normal."
 
@@ -397,7 +438,10 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
                 'detected': current_anomaly_detected,
                 'message': current_anomaly_message
             },
-            'malfunction_logs': latest_malfunction_logs_for_display
+            'malfunction_logs': latest_malfunction_logs_for_display,
+            'raw_data': dashboard_raw_data, 
+            'feature_data': dashboard_feature_data, 
+            'prediction_data': dashboard_prediction_data,
         }
 
         # Konvertiere alle datetime-Objekte in ISO-Strings für die JSON-Serialisierung
@@ -418,6 +462,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
 
     @sync_to_async
     def _save_live_data(self, payload):
+         # Diese Methode ist synchron, wird aber durch @sync_to_async in einen Thread-Pool ausgelagert.
         """Speichert Live-Daten in der Datenbank (synchroner ORM-Aufruf)."""
         LiveData.objects.create(
             timestamp=timezone.now(),
@@ -432,6 +477,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
 
     @sync_to_async
     def _save_twin_data(self, payload):
+         # Diese Methode ist synchron, wird aber durch @sync_to_async in einen Thread-Pool ausgelagert.
         """Speichert Twin-Daten in der Datenbank (synchroner ORM-Aufruf)."""
         TwinData.objects.create(
             timestamp=timezone.now(),
@@ -453,6 +499,41 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             description=payload.get('description'),
             motor_state=payload.get('motor_state', 'unbekannt'),
             emergency_stop_active=payload.get('emergency_stop_active', False),
+        )
+    
+    @sync_to_async
+    def _save_raw_data(self, payload, metric_type):
+        """Speichert Rohdaten in der Datenbank."""
+        # Der Publisher sendet timestamp und value im Payload
+        RawData.objects.create(
+            timestamp=datetime.fromisoformat(payload['timestamp']) if 'timestamp' in payload else timezone.now(),
+            metric_type=metric_type,
+            value=payload.get('value')
+        )
+
+    @sync_to_async
+    def _save_feature_data(self, payload, metric_type):
+        """Speichert Feature-Daten in der Datenbank."""
+        FeatureData.objects.create(
+            timestamp=datetime.fromisoformat(payload['timestamp']) if 'timestamp' in payload else timezone.now(),
+            metric_type=metric_type,
+            mean=payload.get('mean'),
+            min_val=payload.get('min'),
+            max_val=payload.get('max'),
+            median=payload.get('median'),
+            std_dev=payload.get('std'),
+            data_range=payload.get('range'),
+        )
+
+    @sync_to_async
+    def _save_prediction_data(self, payload, metric_type):
+        """Speichert Vorhersagedaten in der Datenbank."""
+        PredictionData.objects.create(
+            timestamp=datetime.fromisoformat(payload['timestamp']) if 'timestamp' in payload else timezone.now(),
+            metric_type=metric_type,
+            predicted_value=payload.get('predicted_value'),
+            anomaly_score=payload.get('anomaly_score'),
+            rul_hours=payload.get('rul_hours'),
         )
 
 # Globale Hilfsfunktion für die Serialisierung

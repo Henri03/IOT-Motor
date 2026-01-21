@@ -172,7 +172,7 @@ def generate_prediction_data(metric_value):
     }
     return prediction
 
-def on_connect(client, userdata, flags, rc):
+def on_connect(client, userdata, flags, rc, properties):
     """Callback function for MQTT connection."""
     if rc == 0:
         print("Connected to MQTT Broker!")
@@ -246,7 +246,7 @@ def publish_data():
                 client.publish(TOPIC_PREDICTION_TORQUE, json.dumps(prediction_torque_payload))
                 print(f"Published Prediction Torque: {prediction_torque_payload}")
 
-            time.sleep(0.5) # Publish every 0.5 seconds
+            time.sleep(5) # Publish every x seconds
     except KeyboardInterrupt:
         print("Publisher stopped.")
     finally:
