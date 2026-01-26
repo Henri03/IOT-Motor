@@ -386,9 +386,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         current_anomaly_detected = False
         current_anomaly_message = "Motor läuft normal."
 
-        # Für die Anomalie-Erkennung verwenden wir weiterhin LiveData und TwinData
-        # da diese die vollständigen Sensordaten enthalten.
-        metrics_to_compare = ['current', 'temp', 'torque'] #, 'voltage', 'rpm', 'vibration',
+        metrics_to_compare = ['current', 'temp', 'torque'] # 'voltage', 'rpm', 'vibration',
 
         logs_to_create = [] # Sammelt Logs, die in dieser Iteration erstellt werden sollen
 
@@ -402,7 +400,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             
         else:
             for metric_name in metrics_to_compare:
-                # ANPASSUNG: raw_value aus latest_raw_data abrufen
+                # raw_value aus latest_raw_data abrufen
                 raw_data_obj = latest_raw_data.get(metric_name)
                 raw_value = raw_data_obj.value if raw_data_obj else None
 
@@ -455,7 +453,19 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             if unacknowledged_error_logs:
                 current_anomaly_detected = True
                 current_anomaly_message = f"KRITISCHE STÖRUNG: {unacknowledged_error_logs[0]['description']}" # Zeige den neuesten UNACKNOWLEDGED Fehler an
+            else:
+                # Wenn keine ERROR-Logs, prüfe auf UNACKNOWLEDGED WARNING-Logs
+                unacknowledged_warning_logs = await sync_to_async(list)(MalfunctionLog.objects.filter(
+                    timestamp__gte=timezone.now() - timezone.timedelta(minutes=5), # Nur Logs der letzten 5 Minuten prüfen
+                    message_type='WARNING',
+                    acknowledged=False 
+                ).order_by('-timestamp').values())
 
+                if unacknowledged_warning_logs:
+                    current_anomaly_detected = True
+                    # Zeige die neueste UNACKNOWLEDGED Warnung an
+                    current_anomaly_message = f"WARNUNG: {unacknowledged_warning_logs[0]['description']}"
+                    
         # Runden der Werte für die Anzeige im Dashboard
         rounded_real_motor_data = _round_numeric_values_for_display(real_motor_data, decimal_places=2)
         rounded_digital_twin_data = _round_numeric_values_for_display(digital_twin_data, decimal_places=2)
