@@ -4,13 +4,27 @@ import paho.mqtt.client as mqtt
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from django.utils import timezone
-from asgiref.sync import async_to_sync
+from asgiref.sync import async_to_sync, sync_to_async
 from channels.layers import get_channel_layer
 from iot_app.models import MotorInfo, LiveData, TwinData, MalfunctionLog, RawData, FeatureData, PredictionData
-from asgiref.sync import sync_to_async
 import traceback
 from datetime import datetime
 import asyncio
+import pytz
+
+# Utility function to make naive datetimes timezone-aware
+def make_aware_from_iso(timestamp_str):
+    """
+    Parses an ISO 8601 datetime string and makes it timezone-aware.
+    Assumes the input string represents a datetime in UTC.
+    """
+    if not timestamp_str:
+        return timezone.now()
+    
+    # Parse the string into a naive datetime object
+    naive_dt = datetime.fromisoformat(timestamp_str)
+
+    return timezone.make_aware(naive_dt, pytz.utc)
 
 class Command(BaseCommand):             # erlaubt es, das Skript mit 'python manage.py mqtt_consumer' in der Datei "docker-compose.yml" auszuführen.
     help = 'Startet einen MQTT-Consumer, um Sensordaten zu empfangen und in der Datenbank zu speichern.'
@@ -30,7 +44,8 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         parser.add_argument('--topic_malfunction_error', type=str, default=settings.MQTT_TOPIC_MALFUNCTION_ERROR, help='MQTT Topic für Fehlermeldungen')
         parser.add_argument('--deviation_threshold', type=float, default=getattr(settings, 'MQTT_DEVIATION_THRESHOLD_PERCENT', 10.0),
                             help='Prozentuale Abweichung zwischen Live- und Twin-Daten, die eine Warnung auslöst.')
-
+        parser.add_argument('--data_freshness_threshold', type=int, default=settings.DATA_FRESHNESS_THRESHOLD_SECONDS,
+                            help='Maximale Zeit in Sekunden, nach der Daten als veraltet gelten und als "-" angezeigt werden.')
         parser.add_argument('--topic_raw_temperature', type=str, default=getattr(settings, 'MQTT_TOPIC_RAW_TEMPERATURE', "raw/temperature"), help='MQTT Topic für Rohdaten Temperatur')
         parser.add_argument('--topic_raw_current', type=str, default=getattr(settings, 'MQTT_TOPIC_RAW_CURRENT', "raw/current"), help='MQTT Topic für Rohdaten Strom')
         parser.add_argument('--topic_raw_torque', type=str, default=getattr(settings, 'MQTT_TOPIC_RAW_TORQUE', "raw/torque"), help='MQTT Topic für Rohdaten Drehmoment')
@@ -56,6 +71,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         self.topic_malfunction_warning = options['topic_malfunction_warning']
         self.topic_malfunction_error = options['topic_malfunction_error']
         self.deviation_threshold = options['deviation_threshold']
+        self.data_freshness_threshold = options['data_freshness_threshold']
 
         self.topic_raw_temperature = options['topic_raw_temperature']
         self.topic_raw_current = options['topic_raw_current']
@@ -70,7 +86,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         self.topic_prediction_torque = options['topic_prediction_torque']
 
         # Initialisiert den Anomalie-Status für jede Metrik
-        metrics_to_compare = ['current', 'voltage', 'rpm', 'vibration', 'temp', 'torque']
+        metrics_to_compare = ['current', 'temp', 'torque']  #, 'voltage', 'rpm', 'vibration'
         for metric_name in metrics_to_compare:
             self.last_anomaly_state[metric_name] = False
 
@@ -87,6 +103,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         self.stdout.write(self.style.SUCCESS(f"Abonniere Vorhersage-Topics: {self.topic_prediction_temperature}, {self.topic_prediction_current}, {self.topic_prediction_torque}"))
 
         self.stdout.write(self.style.SUCCESS(f"Abweichungsschwellenwert für Warnungen: {self.deviation_threshold}%"))
+        self.stdout.write(self.style.SUCCESS(f"Datenaktualitäts-Schwellenwert: {self.data_freshness_threshold} Sekunden"))
 
         client = mqtt.Client()
         client.on_connect = async_to_sync(self._on_connect_async)
@@ -207,7 +224,6 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         await self._notify_dashboard_group("plot_data_point")   # await, da _notify_dashboard_group async ist
         self.stdout.write(self.style.SUCCESS(f"Twin-Daten gespeichert und Dashboard benachrichtigt."))
 
-
     async def _handle_malfunction_data(self, payload, topic_type):
         """
         Verarbeitet Nachrichten von den Malfunction-Topics (Info, Warning, Error).
@@ -317,93 +333,113 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             'torque': await sync_to_async(PredictionData.objects.filter(metric_type='torque').order_by('-timestamp').first)(),
         }
 
+        def is_data_fresh(data_object, threshold_seconds):
+            if data_object and data_object.timestamp:
+                # Stellen Sie sicher, dass der Zeitstempel timezone-aware ist, bevor Sie ihn vergleichen
+                # timezone.now() ist immer timezone-aware
+                return (timezone.now() - data_object.timestamp).total_seconds() < threshold_seconds
+            return False
+
         # Nur die neuesten 5 Logs für die Anzeige abrufen
         latest_malfunction_logs_for_display = await sync_to_async(list)(
             MalfunctionLog.objects.order_by('-timestamp')[:5].values()
         )
 
+             ## Daten ans Dashboard senden
+        # Hier wird die Aktualität geprüft und ggf. '-' gesetzt
         real_motor_data = {
-            "Strom": {"value": latest_live_data.current if latest_live_data else None, "unit": "A"},
-            "Spannung": {"value": latest_live_data.voltage if latest_live_data else None, "unit": "V"},
-            "Drehzahl": {"value": latest_live_data.rpm if latest_live_data else None, "unit": "U/min"},
-            "Vibration": {"value": latest_live_data.vibration if latest_live_data else None, "unit": "mm/s"},
-            "Temperatur": {"value": latest_live_data.temp if latest_live_data else None, "unit": "°C"},
-            "Drehmoment": {"value": latest_live_data.torque if latest_live_data else None, "unit": "Nm"},
-            "Laufzeit": {"value": latest_live_data.run_time if latest_live_data else None, "unit": "h"},
+            "Strom": {"value": latest_raw_data['current'].value if is_data_fresh(latest_raw_data['current'], self.data_freshness_threshold) else '-', "unit": "A"},
+            "Spannung": {"value": latest_live_data.voltage if is_data_fresh(latest_live_data, self.data_freshness_threshold) else '-', "unit": "V"},
+            "Drehzahl": {"value": latest_live_data.rpm if is_data_fresh(latest_live_data, self.data_freshness_threshold) else '-', "unit": "U/min"},
+            "Vibration": {"value": latest_live_data.vibration if is_data_fresh(latest_live_data, self.data_freshness_threshold) else '-', "unit": "mm/s"},
+            "Temperatur": {"value": latest_raw_data['temperature'].value if is_data_fresh(latest_raw_data['temperature'], self.data_freshness_threshold) else '-', "unit": "°C"},
+            "Drehmoment": {"value": latest_raw_data['torque'].value if is_data_fresh(latest_raw_data['torque'], self.data_freshness_threshold) else '-', "unit": "Nm"},
+            "Laufzeit": {"value": latest_live_data.run_time if is_data_fresh(latest_live_data, self.data_freshness_threshold) else '-', "unit": "h"},
             "Anzahl eingefahren": {"value": retracted_count, "unit": ""},
             "Anzahl ausgefahren": {"value": extended_count, "unit": ""},
         }
-
+        
+        # Für Twin-Daten könnten Sie eine ähnliche Logik anwenden, wenn der Twin-Publisher auch stoppen kann
         digital_twin_data = {
-            "Strom": {"value": latest_twin_data.current if latest_twin_data else None, "unit": "A"},
-            "Spannung": {"value": latest_twin_data.voltage if latest_twin_data else None, "unit": "V"},
-            "Drehzahl": {"value": latest_twin_data.rpm if latest_twin_data else None, "unit": "U/min"},
-            "Vibration": {"value": latest_twin_data.vibration if latest_twin_data else None, "unit": "mm/s"},
-            "Temperatur": {"value": latest_twin_data.temp if latest_twin_data else None, "unit": "°C"},
-            "Drehmoment": {"value": latest_twin_data.torque if latest_twin_data else None, "unit": "Nm"},
-            "Laufzeit": {"value": latest_twin_data.run_time if latest_twin_data else None, "unit": "h"},
+            "Strom": {"value": latest_twin_data.current if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "A"},
+            "Spannung": {"value": latest_twin_data.voltage if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "V"},
+            "Drehzahl": {"value": latest_twin_data.rpm if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "U/min"},
+            "Vibration": {"value": latest_twin_data.vibration if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "mm/s"},
+            "Temperatur": {"value": latest_twin_data.temp if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "°C"},
+            "Drehmoment": {"value": latest_twin_data.torque if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "Nm"},
+            "Laufzeit": {"value": latest_twin_data.run_time if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "h"},
             "Anzahl eingefahren": {"value": retracted_count, "unit": ""}, 
             "Anzahl ausgefahren": {"value": extended_count, "unit": ""}, 
         }
        # Daten für Raw, Feature, Prediction für das Dashboard aufbereiten
         dashboard_raw_data = {
-            metric: {'value': getattr(data, 'value', None), 'timestamp': getattr(data, 'timestamp', None)}
+            metric: {'value': getattr(data, 'value', None) if is_data_fresh(data, self.data_freshness_threshold) else None, 'timestamp': getattr(data, 'timestamp', None)}
             for metric, data in latest_raw_data.items()
         }
         dashboard_feature_data = {
             metric: {
-                'mean': getattr(data, 'mean', None),
-                'min': getattr(data, 'min_val', None),
-                'max': getattr(data, 'max_val', None),
-                'median': getattr(data, 'median', None),
-                'std': getattr(data, 'std_dev', None),
-                'range': getattr(data, 'data_range', None),
+                'mean': getattr(data, 'mean', None) if is_data_fresh(data, self.data_freshness_threshold) else None,
+                'min': getattr(data, 'min_val', None) if is_data_fresh(data, self.data_freshness_threshold) else None,
+                'max': getattr(data, 'max_val', None) if is_data_fresh(data, self.data_freshness_threshold) else None,
+                'median': getattr(data, 'median', None) if is_data_fresh(data, self.data_freshness_threshold) else None,
+                'std': getattr(data, 'std_dev', None) if is_data_fresh(data, self.data_freshness_threshold) else None,
+                'range': getattr(data, 'data_range', None) if is_data_fresh(data, self.data_freshness_threshold) else None,
                 'timestamp': getattr(data, 'timestamp', None)
             } for metric, data in latest_feature_data.items()
         }
         dashboard_prediction_data = {
             metric: {
-                'predicted_value': getattr(data, 'predicted_value', None),
-                'anomaly_score': getattr(data, 'anomaly_score', None),
-                'rul_hours': getattr(data, 'rul_hours', None),
+                'predicted_value': getattr(data, 'predicted_value', None) if is_data_fresh(data, self.data_freshness_threshold) else None,
+                'anomaly_score': getattr(data, 'anomaly_score', None) if is_data_fresh(data, self.data_freshness_threshold) else None,
+                'rul_hours': getattr(data, 'rul_hours', None) if is_data_fresh(data, self.data_freshness_threshold) else None,
                 'timestamp': getattr(data, 'timestamp', None)
             } for metric, data in latest_prediction_data.items()
         }
         current_anomaly_detected = False
         current_anomaly_message = "Motor läuft normal."
 
-        metrics_to_compare = ['current', 'voltage', 'rpm', 'vibration', 'temp', 'torque']
+        # Für die Anomalie-Erkennung verwenden wir weiterhin LiveData und TwinData
+        # da diese die vollständigen Sensordaten enthalten.
+        metrics_to_compare = ['current', 'temp', 'torque'] #, 'voltage', 'rpm', 'vibration',
 
         logs_to_create = [] # Sammelt Logs, die in dieser Iteration erstellt werden sollen
 
-        if not latest_live_data or not latest_twin_data:
-            current_anomaly_message = "Keine ausreichenden Daten für Anomalie-Erkennung verfügbar."
-            current_anomaly_detected = True
+        if not latest_raw_data['current'] or not latest_raw_data['temperature'] or not latest_raw_data['torque'] or not latest_twin_data or \
+            not is_data_fresh(latest_raw_data['current'], self.data_freshness_threshold) or \
+            not is_data_fresh(latest_raw_data['temperature'], self.data_freshness_threshold) or \
+            not is_data_fresh(latest_raw_data['torque'], self.data_freshness_threshold) or \
+            not is_data_fresh(latest_twin_data, self.data_freshness_threshold):
+            current_anomaly_message = "Keine ausreichenden oder aktuellen Daten für Anomalie-Erkennung verfügbar."
+            current_anomaly_detected = True       
+            
         else:
             for metric_name in metrics_to_compare:
-                live_value = getattr(latest_live_data, metric_name, None)
+                # ANPASSUNG: raw_value aus latest_raw_data abrufen
+                raw_data_obj = latest_raw_data.get(metric_name)
+                raw_value = raw_data_obj.value if raw_data_obj else None
+
+                # twin_value aus latest_twin_data abrufen
                 twin_value = getattr(latest_twin_data, metric_name, None)
 
                 is_currently_deviating = False
-                if live_value is not None and twin_value is not None:
+                if raw_value is not None and twin_value is not None:
                     if twin_value != 0:
-                        deviation = abs((live_value - twin_value) / twin_value) * 100
+                        deviation = abs((raw_value - twin_value) / twin_value) * 100
                         if deviation > deviation_threshold:
                             is_currently_deviating = True
                             current_anomaly_detected = True
                             if "KRITISCHE STÖRUNG" not in current_anomaly_message: # Überschreibe nicht kritische Meldungen
                                 current_anomaly_message = f"WARNUNG: {metric_name.capitalize()}-Abweichung erkannt."
-                    elif live_value != 0 and twin_value == 0: # Sonderfall: Twin ist 0, Live nicht
+                    elif raw_value != 0 and twin_value == 0: # Sonderfall: Twin ist 0, Raw ist nicht
                         is_currently_deviating = True
                         current_anomaly_detected = True
                         if "KRITISCHE STÖRUNG" not in current_anomaly_message:
-                            current_anomaly_message = f"WARNUNG: {metric_name.capitalize()}-Abweichung: Twin ist 0, Live ist {live_value:.2f}."
-
+                            current_anomaly_message = f"WARNUNG: {metric_name.capitalize()}-Abweichung: Twin ist 0, Raw ist {raw_value:.2f}."
                 # Logik zur Erstellung von MalfunctionLogs bei Statusänderungen
                 if is_currently_deviating and not last_anomaly_state.get(metric_name, False):
                     logs_to_create.append({
                         'message_type': 'WARNING',
-                        'description': f"{metric_name.capitalize()}-Abweichung > {deviation_threshold:.1f}% erkannt (Live: {live_value:.2f}, Twin: {twin_value:.2f})",
+                        'description': f"{metric_name.capitalize()}-Abweichung > {deviation_threshold:.1f}% erkannt (Raw: {raw_value:.2f}, Twin: {twin_value:.2f})",
                         'motor_state': 'unbekannt', # Oder basierend auf weiteren Daten bestimmen
                         'emergency_stop_active': False
                     })
@@ -462,10 +498,13 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
 
     @sync_to_async
     def _save_live_data(self, payload):
-         # Diese Methode ist synchron, wird aber durch @sync_to_async in einen Thread-Pool ausgelagert.
-        """Speichert Live-Daten in der Datenbank (synchroner ORM-Aufruf)."""
+        """
+        Speichert Live-Daten in der Datenbank.
+        Uses payload timestamp if available and makes it timezone-aware, otherwise uses timezone.now().
+        """
+        timestamp = make_aware_from_iso(payload.get('timestamp')) if 'timestamp' in payload else timezone.now()
         LiveData.objects.create(
-            timestamp=timezone.now(),
+            timestamp=timestamp,
             current=payload.get('current'),
             voltage=payload.get('voltage'),
             rpm=payload.get('rpm'),
@@ -477,10 +516,13 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
 
     @sync_to_async
     def _save_twin_data(self, payload):
-         # Diese Methode ist synchron, wird aber durch @sync_to_async in einen Thread-Pool ausgelagert.
-        """Speichert Twin-Daten in der Datenbank (synchroner ORM-Aufruf)."""
+        """
+        Speichert Twin-Daten in der Datenbank.
+        Uses payload timestamp if available and makes it timezone-aware, otherwise uses timezone.now().
+        """
+        timestamp = make_aware_from_iso(payload.get('timestamp')) if 'timestamp' in payload else timezone.now()
         TwinData.objects.create(
-            timestamp=timezone.now(),
+            timestamp=timestamp,
             current=payload.get('current'),
             voltage=payload.get('voltage'),
             rpm=payload.get('rpm'),
@@ -492,9 +534,13 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
 
     @sync_to_async
     def _save_malfunction_log(self, payload):
-        """Speichert eine Störmeldung (Info, Warning, Error) in der Datenbank (synchroner ORM-Aufruf)."""
+        """
+        Speichert eine Störmeldung (Info, Warning, Error) in der Datenbank.
+        Uses payload timestamp if available and makes it timezone-aware, otherwise uses timezone.now().
+        """
+        timestamp = make_aware_from_iso(payload.get('timestamp')) if 'timestamp' in payload else timezone.now()
         MalfunctionLog.objects.create(
-            timestamp=timezone.now(),
+            timestamp=timestamp,
             message_type=payload.get('message_type'),
             description=payload.get('description'),
             motor_state=payload.get('motor_state', 'unbekannt'),
@@ -503,19 +549,26 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
     
     @sync_to_async
     def _save_raw_data(self, payload, metric_type):
-        """Speichert Rohdaten in der Datenbank."""
-        # Der Publisher sendet timestamp und value im Payload
+        """
+        Speichert Rohdaten in der Datenbank.
+        Macht den Timestamp timezone-aware.
+        """
+        timestamp = make_aware_from_iso(payload.get('timestamp'))
         RawData.objects.create(
-            timestamp=datetime.fromisoformat(payload['timestamp']) if 'timestamp' in payload else timezone.now(),
+            timestamp=timestamp,
             metric_type=metric_type,
             value=payload.get('value')
         )
 
     @sync_to_async
     def _save_feature_data(self, payload, metric_type):
-        """Speichert Feature-Daten in der Datenbank."""
+        """
+        Speichert Feature-Daten in der Datenbank.
+        Macht den Timestamp timezone-aware.
+        """
+        timestamp = make_aware_from_iso(payload.get('timestamp'))
         FeatureData.objects.create(
-            timestamp=datetime.fromisoformat(payload['timestamp']) if 'timestamp' in payload else timezone.now(),
+            timestamp=timestamp,
             metric_type=metric_type,
             mean=payload.get('mean'),
             min_val=payload.get('min'),
@@ -527,9 +580,13 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
 
     @sync_to_async
     def _save_prediction_data(self, payload, metric_type):
-        """Speichert Vorhersagedaten in der Datenbank."""
+        """
+        Speichert Vorhersagedaten in der Datenbank.
+        Macht den Timestamp timezone-aware.
+        """
+        timestamp = make_aware_from_iso(payload.get('timestamp'))
         PredictionData.objects.create(
-            timestamp=datetime.fromisoformat(payload['timestamp']) if 'timestamp' in payload else timezone.now(),
+            timestamp=timestamp,
             metric_type=metric_type,
             predicted_value=payload.get('predicted_value'),
             anomaly_score=payload.get('anomaly_score'),

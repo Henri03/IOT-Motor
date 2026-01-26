@@ -19,7 +19,7 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 500000
 # Enable timezone support
 USE_TZ = True
 # Set the default timezone for the project
-TIME_ZONE = 'Europe/Berlin' # Or your desired timezone
+TIME_ZONE = 'Europe/Berlin' 
 
 # List of installed Django applications
 INSTALLED_APPS = [
@@ -152,6 +152,10 @@ PREDICTION_TOPIC_TORQUE = "prediction/torque"
 MQTT_TOPIC_MALFUNCTION_INFO = os.environ.get('MQTT_TOPIC_MALFUNCTION_INFO', 'iot/motor/malfunction/info')
 MQTT_TOPIC_MALFUNCTION_WARNING = os.environ.get('MQTT_TOPIC_MALFUNCTION_WARNING', 'iot/motor/malfunction/warning')
 MQTT_TOPIC_MALFUNCTION_ERROR = os.environ.get('MQTT_TOPIC_MALFUNCTION_ERROR', 'iot/motor/malfunction/error')
+
+# Wenn keine neuen Daten innerhalb dieser Zeitspanne empfangen wurden,
+# werden die Werte auf dem Dashboard als "nicht verfügbar" (-) angezeigt.
+DATA_FRESHNESS_THRESHOLD_SECONDS = 10
 
 # Default percentage deviation threshold between live and twin data that triggers a warning
 MQTT_DEVIATION_THRESHOLD_PERCENT = 80.0

@@ -7,3 +7,4 @@ gunicorn
 uvicorn[standard]
 channels_redis
 whitenoise
+pytz

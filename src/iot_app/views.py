@@ -10,7 +10,6 @@ def dashboard_view(request):
     # Since there is only one motor, we simply retrieve the first (and only) motor
     motor = MotorInfo.objects.first()
     if not motor:
-        # Optional: Error page or instructions to create a motor in the admin
         return render(request, 'iot_app/no_motor_configured.html', {'message': 'Please configure a motor in the admin area first.'})
 
     # Retrieve latest live data
@@ -39,7 +38,7 @@ def dashboard_view(request):
 
     # Simple anomaly status (can be expanded)
     anomaly_detected = False
-    anomaly_message = "Motor running normally."
+    anomaly_message = " - "
     if latest_live_data and latest_twin_data:
         if latest_live_data.current is not None and latest_twin_data.current is not None and \
            abs(latest_live_data.current - latest_twin_data.current) > 5.0: # Example threshold

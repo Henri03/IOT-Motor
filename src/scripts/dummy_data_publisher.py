@@ -194,8 +194,8 @@ def publish_data():
             live_data_payload = generate_live_data()
             twin_data_payload = generate_twin_data(live_data_payload)
 
-            client.publish(TOPIC_LIVE, json.dumps(live_data_payload))
-            print(f"Published Live Data: {live_data_payload}")
+            #client.publish(TOPIC_LIVE, json.dumps(live_data_payload))
+            #print(f"Published Live Data: {live_data_payload}")
 
             client.publish(TOPIC_TWIN, json.dumps(twin_data_payload))
             print(f"Published Twin Data: {twin_data_payload}")
