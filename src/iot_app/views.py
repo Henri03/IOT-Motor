@@ -1,6 +1,11 @@
-# IOT_PROJECT/src/iot_app/views.py
+# path: src/iot_app/views.py
 from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+import json # Import json for parsing request body
+from datetime import datetime
+
 from .models import MotorInfo, LiveData, TwinData, MalfunctionLog
 
 def dashboard_view(request):
@@ -63,10 +68,40 @@ def dashboard_view(request):
 def malfunction_log_view(request):
     """
     Displays the malfunction logs for the motor.
+    Only displays logs that have not been acknowledged.
     """
-    logs = MalfunctionLog.objects.all().order_by('-timestamp')[:100]
+    # Filter for logs where 'acknowledged' is False
+    logs = MalfunctionLog.objects.filter(acknowledged=False).order_by('-timestamp')[:100] # Limit to last 100 unacknowledged logs
+    current_year = datetime.now().year
     context = {
         'malfunction_logs': logs,
-        'current_year': timezone.now().year,
+        'current_year': current_year,
     }
     return render(request, 'iot_app/malfunction_log.html', context)
+
+@require_POST
+def acknowledge_log(request, log_id):
+    """
+    API endpoint to acknowledge a specific malfunction log.
+    Requires POST request.
+    """
+    try:
+        log_entry = get_object_or_404(MalfunctionLog, id=log_id)
+        log_entry.acknowledged = True
+        log_entry.save()
+        return JsonResponse({'success': True, 'message': 'Log acknowledged successfully.'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@require_POST
+def delete_log(request, log_id):
+    """
+    API endpoint to delete a specific malfunction log.
+    Requires POST request.
+    """
+    try:
+        log_entry = get_object_or_404(MalfunctionLog, id=log_id)
+        log_entry.delete()
+        return JsonResponse({'success': True, 'message': 'Log deleted successfully.'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

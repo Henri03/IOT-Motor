@@ -103,6 +103,7 @@ class MalfunctionLog(models.Model):
     description = models.TextField(verbose_name="Description")
     motor_state = models.CharField(max_length=50, verbose_name="Motor State")
     emergency_stop_active = models.BooleanField(default=False, verbose_name="Emergency Stop Active")
+    acknowledged = models.BooleanField(default=False, verbose_name="Acknowledged")
 
     @property
     def css_class(self):

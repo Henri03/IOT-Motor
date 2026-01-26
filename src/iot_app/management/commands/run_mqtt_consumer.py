@@ -12,22 +12,7 @@ from datetime import datetime
 import asyncio
 import pytz
 
-# Utility function to make naive datetimes timezone-aware
-def make_aware_from_iso(iso_string):
-    """
-    Parses an ISO formatted string to a datetime object and ensures it's timezone-aware (UTC).
-    If the string already contains timezone info, it will be parsed as aware.
-    If it's naive, it will be made aware with UTC.
-    """
-    if not iso_string:
-        return None
-    dt_object = datetime.fromisoformat(iso_string)
-    if timezone.is_aware(dt_object):
-        # If the datetime object is already timezone-aware, ensure it's in UTC
-        return dt_object.astimezone(pytz.utc)
-    else:
-        # If it's naive, make it timezone-aware with UTC
-        return timezone.make_aware(dt_object, pytz.utc)
+
 
 class Command(BaseCommand):             # erlaubt es, das Skript mit 'python manage.py mqtt_consumer' in der Datei "docker-compose.yml" auszuführen.
     help = 'Startet einen MQTT-Consumer, um Sensordaten zu empfangen und in der Datenbank zu speichern.'
@@ -348,7 +333,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             MalfunctionLog.objects.order_by('-timestamp')[:5].values()
         )
 
-             ## Daten ans Dashboard senden
+        ## Daten ans Dashboard senden
         # Hier wird die Aktualität geprüft und ggf. '-' gesetzt
         real_motor_data = {
             "Strom": {"value": latest_raw_data['current'].value if is_data_fresh(latest_raw_data['current'], self.data_freshness_threshold) else '-', "unit": "A"},
@@ -460,27 +445,35 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             for log_data in logs_to_create:
                 await sync_to_async(MalfunctionLog.objects.create)(**log_data)
 
-            # Prüfe auf aktuelle ERROR-Logs, die die Anomalie-Meldung überschreiben könnten
-            recent_logs = await sync_to_async(list)(MalfunctionLog.objects.filter(
-                timestamp__gte=timezone.now() - timezone.timedelta(minutes=5) # Nur Logs der letzten 5 Minuten prüfen
+            # Prüfe auf aktuelle UNACKNOWLEDGED ERROR-Logs, die die Anomalie-Meldung überschreiben könnten
+            unacknowledged_error_logs = await sync_to_async(list)(MalfunctionLog.objects.filter(
+                timestamp__gte=timezone.now() - timezone.timedelta(minutes=5), # Nur Logs der letzten 5 Minuten prüfen
+                message_type='ERROR',
+                acknowledged=False 
             ).order_by('-timestamp').values())
 
-            error_logs = [log for log in recent_logs if log['message_type'] == 'ERROR']
-            if error_logs:
+            if unacknowledged_error_logs:
                 current_anomaly_detected = True
-                current_anomaly_message = f"KRITISCHE STÖRUNG: {error_logs[0]['description']}" # Zeige den neuesten Fehler an
+                current_anomaly_message = f"KRITISCHE STÖRUNG: {unacknowledged_error_logs[0]['description']}" # Zeige den neuesten UNACKNOWLEDGED Fehler an
+
+        # Runden der Werte für die Anzeige im Dashboard
+        rounded_real_motor_data = _round_numeric_values_for_display(real_motor_data, decimal_places=2)
+        rounded_digital_twin_data = _round_numeric_values_for_display(digital_twin_data, decimal_places=2)
+        rounded_dashboard_raw_data = _round_numeric_values_for_display(dashboard_raw_data, decimal_places=2)
+        rounded_dashboard_feature_data = _round_numeric_values_for_display(dashboard_feature_data, decimal_places=2)
+        rounded_dashboard_prediction_data = _round_numeric_values_for_display(dashboard_prediction_data, decimal_places=2)
 
         message_to_send = {
-            'real_motor_data': real_motor_data,
-            'digital_twin_data': digital_twin_data,
+            'real_motor_data': rounded_real_motor_data,
+            'digital_twin_data': rounded_digital_twin_data,
             'anomaly_status': {
                 'detected': current_anomaly_detected,
                 'message': current_anomaly_message
             },
             'malfunction_logs': latest_malfunction_logs_for_display,
-            'raw_data': dashboard_raw_data, 
-            'feature_data': dashboard_feature_data, 
-            'prediction_data': dashboard_prediction_data,
+            'raw_data': rounded_dashboard_raw_data, 
+            'feature_data': rounded_dashboard_feature_data, 
+            'prediction_data': rounded_dashboard_prediction_data,
         }
 
         # Konvertiere alle datetime-Objekte in ISO-Strings für die JSON-Serialisierung
@@ -609,3 +602,40 @@ def _to_serializable_dict(obj):
     if isinstance(obj, list):
         return [_to_serializable_dict(elem) for elem in obj]
     return obj
+
+    # Utility function to make naive datetimes timezone-aware
+def make_aware_from_iso(iso_string):
+    """
+    Parses an ISO formatted string to a datetime object and ensures it's timezone-aware (UTC).
+    If the string already contains timezone info, it will be parsed as aware.
+    If it's naive, it will be made aware with UTC.
+    """
+    if not iso_string:
+        return None
+    dt_object = datetime.fromisoformat(iso_string)
+    if timezone.is_aware(dt_object):
+        # If the datetime object is already timezone-aware, ensure it's in UTC
+        return dt_object.astimezone(pytz.utc)
+    else:
+        # If it's naive, make it timezone-aware with UTC
+        return timezone.make_aware(dt_object, pytz.utc)
+def _round_numeric_values_for_display(data_dict, decimal_places=2):
+    """
+    Recursively rounds numeric 'value' fields within a dictionary for display purposes.
+    This function creates a deep copy to avoid modifying the original data.
+    """
+    rounded_data = {}
+    for key, item in data_dict.items():
+        if isinstance(item, dict):
+            if 'value' in item and isinstance(item['value'], (int, float)):
+                # Round numeric values, but keep 'N/A' or other strings as is
+                rounded_value = round(item['value'], decimal_places)
+                rounded_data[key] = {**item, 'value': rounded_value}
+            else:
+                # Recursively process nested dictionaries
+                rounded_data[key] = _round_numeric_values_for_display(item, decimal_places)
+        elif isinstance(item, list):
+            rounded_data[key] = [_round_numeric_values_for_display(elem, decimal_places) for elem in item]
+        else:
+            rounded_data[key] = item
+    return rounded_data
