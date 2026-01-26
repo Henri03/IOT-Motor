@@ -1,5 +1,5 @@
 # IOT_PROJECT/src/iot_app/utils.py
-from .models import LiveData, TwinData, MalfunctionLog, MotorInfo, ReferenceRun, RawData, FeatureData, PredictionData
+from .models import LiveData, TwinData, MalfunctionLog, MotorInfo, RawData, FeatureData, PredictionData
 from django.utils import timezone
 from datetime import timedelta, datetime
 from django.db.models import Q
@@ -9,6 +9,7 @@ from django.db.models import Q
 def get_latest_live_data():
     """
     Retrieves the latest live data and returns it in a standardized format.
+    This function is now primarily for metrics that don't have a dedicated RawData topic (e.g., Voltage, RPM, Vibration).
     Returns all expected keys, even if no data is available.
     """
     data = {
@@ -23,20 +24,20 @@ def get_latest_live_data():
 
     latest = LiveData.objects.order_by('-timestamp').first()
     if latest:
-        data['Strom']['value'] = latest.current
+        # Current, Temp, Torque will be overridden by RawData in get_dashboard_data if available
+        data['Strom']['value'] = latest.current 
         data['Spannung']['value'] = latest.voltage
         data['Drehzahl']['value'] = latest.rpm
         data['Vibration']['value'] = latest.vibration
         data['Temperatur']['value'] = latest.temp
-        if hasattr(latest, 'torque'):
-            data['Drehmoment']['value'] = latest.torque
-        if hasattr(latest, 'run_time'):
-            data['Laufzeit']['value'] = latest.run_time
+        data['Drehmoment']['value'] = latest.torque
+        data['Laufzeit']['value'] = latest.run_time
     return data
 
 def get_latest_digital_twin():
     """
-    Retrieves the latest Digital Twin (ReferenceRun) data and returns it in a standardized format.
+    Retrieves the latest Digital Twin (TwinData) data and returns it in a standardized format.
+    This replaces the previous ReferenceRun usage.
     Returns all expected keys, even if no data is available.
     """
     
@@ -50,18 +51,15 @@ def get_latest_digital_twin():
         'Laufzeit': {'value': None, 'unit': 'h'},
     }
 
-    # For displaying the *current* twin values in the panel use the last valid ReferenceRun.
-    ref_data = ReferenceRun.objects.filter(is_valid=True).order_by('-timestamp').first()
-    if ref_data:
-        data['Strom']['value'] = ref_data.current
-        data['Spannung']['value'] = ref_data.voltage
-        data['Drehzahl']['value'] = ref_data.rpm
-        data['Vibration']['value'] = ref_data.vibration
-        data['Temperatur']['value'] = ref_data.temp
-        if hasattr(ref_data, 'torque'):
-            data['Drehmoment']['value'] = ref_data.torque
-        if hasattr(ref_data, 'run_time'):
-            data['Laufzeit']['value'] = ref_data.run_time
+    latest_twin_data = TwinData.objects.order_by('-timestamp').first()
+    if latest_twin_data:
+        data['Strom']['value'] = latest_twin_data.current
+        data['Spannung']['value'] = latest_twin_data.voltage
+        data['Drehzahl']['value'] = latest_twin_data.rpm
+        data['Vibration']['value'] = latest_twin_data.vibration
+        data['Temperatur']['value'] = latest_twin_data.temp
+        data['Drehmoment']['value'] = latest_twin_data.torque
+        data['Laufzeit']['value'] = latest_twin_data.run_time
     return data
 
 def get_latest_raw_data_for_dashboard():
@@ -125,81 +123,10 @@ def get_latest_prediction_data_for_dashboard():
 
 def get_anomaly_status():
     """
-    Determines the current anomaly status based on live and twin data, as well as error messages.
-    This function is not directly called by get_dashboard_data in the current setup;
-    anomaly detection happens in the MQTT consumer.
-    It is kept here in case it is needed elsewhere.
+    This function is deprecated as anomaly detection is now handled directly in the MQTT consumer
+    to ensure real-time updates and logging. It is kept here for reference but not used.
     """
-    latest_live = LiveData.objects.order_by('-timestamp').first()
-    # For anomaly detection, ReferenceRun is still used here as the source for "expected values" in the UI.
-    latest_twin_for_comparison = ReferenceRun.objects.filter(is_valid=True).order_by('-timestamp').first()
-    latest_malfunction_log = MalfunctionLog.objects.order_by('-timestamp').first()
-
-    anomaly_status = {"detected": False, "message": "No anomaly detected."}
-
-    if latest_malfunction_log:
-        if latest_malfunction_log.message_type in ['ERROR', 'WARNING']:
-            anomaly_status["detected"] = True
-            anomaly_status["message"] = f"CRITICAL ERROR: Motor fault reported! ({latest_malfunction_log.description})"
-            return anomaly_status
-        elif latest_malfunction_log.message_type == 'INFO':
-            anomaly_status["detected"] = False
-            anomaly_status["message"] = f"Information: {latest_malfunction_log.description}"
-
-    if not latest_live or not latest_twin_for_comparison:
-        if not anomaly_status["detected"]:
-            anomaly_status["detected"] = False
-            anomaly_status["message"] = "No data available."
-        return anomaly_status
-
-    if not anomaly_status["detected"]:
-        # Example: Current deviation
-        if latest_twin_for_comparison.current is not None and latest_live.current is not None:
-            if abs(latest_live.current - latest_twin_for_comparison.current) > 0.2 * latest_twin_for_comparison.current:
-                anomaly_status["detected"] = True
-                anomaly_status["message"] = "Current out of expected range!"
-                return anomaly_status
-
-        # Example: RPM deviation
-        if latest_twin_for_comparison.rpm is not None and latest_live.rpm is not None:
-            if abs(latest_live.rpm - latest_twin_for_comparison.rpm) > 0.2 * latest_twin_for_comparison.rpm:
-                anomaly_status["detected"] = True
-                anomaly_status["message"] = "RPM out of expected range!"
-                return anomaly_status
-
-        # Example: Voltage deviation
-        if latest_twin_for_comparison.voltage is not None and latest_live.voltage is not None:
-            if abs(latest_live.voltage - latest_twin_for_comparison.voltage) > 0.2 * latest_twin_for_comparison.voltage:
-                anomaly_status["detected"] = True
-                anomaly_status["message"] = "Voltage out of expected range!"
-                return anomaly_status
-
-        # Vibration and temperature added for anomaly detection
-        if latest_twin_for_comparison.vibration is not None and latest_live.vibration is not None:
-            if abs(latest_live.vibration - latest_twin_for_comparison.vibration) > 0.2 * latest_twin_for_comparison.vibration:
-                anomaly_status["detected"] = True
-                anomaly_status["message"] = "Vibration out of expected range!"
-                return anomaly_status
-
-        if latest_twin_for_comparison.temp is not None and latest_live.temp is not None:
-            if abs(latest_live.temp - latest_twin_for_comparison.temp) > 0.2 * latest_twin_for_comparison.temp:
-                anomaly_status["detected"] = True
-                anomaly_status["message"] = "Temperature out of expected range!"
-                return anomaly_status
-
-        if latest_twin_for_comparison.torque is not None and latest_live.torque is not None:
-            if abs(latest_live.torque - latest_twin_for_comparison.torque) > 0.2 * latest_twin_for_comparison.torque:
-                anomaly_status["detected"] = True
-                anomaly_status["message"] = "Torque out of expected range!"
-                return anomaly_status
-
-        if latest_twin_for_comparison.run_time is not None and latest_live.run_time is not None:
-            if abs(latest_live.run_time - latest_twin_for_comparison.run_time) > 0.2 * latest_twin_for_comparison.run_time:
-                anomaly_status["detected"] = True
-                anomaly_status["message"] = "Run time out of expected range!"
-                return anomaly_status
-
-    return anomaly_status
+    return {"detected": False, "message": "Anomaly status handled by MQTT consumer."}
 
 def get_dashboard_data():
     """
@@ -230,15 +157,30 @@ def get_dashboard_data():
             "operating_mode": motor_info_obj.operating_mode,
         }
 
-    real_motor_data = get_latest_live_data()
+    # Get latest LiveData for Voltage, RPM, Vibration, and as fallback for others
+    live_data = get_latest_live_data()
+    # Get latest RawData for Current, Temperature, Torque (priority)
+    raw_data_panel = get_latest_raw_data_for_dashboard()
+    
+    # Construct real_motor_data, prioritizing RawData where available
+    real_motor_data = {
+        'Strom': raw_data_panel['current'] if raw_data_panel['current']['value'] is not None else live_data['Strom'],
+        'Spannung': live_data['Spannung'],
+        'Drehzahl': live_data['Drehzahl'],
+        'Vibration': live_data['Vibration'],
+        'Temperatur': raw_data_panel['temperature'] if raw_data_panel['temperature']['value'] is not None else live_data['Temperatur'],
+        'Drehmoment': raw_data_panel['torque'] if raw_data_panel['torque']['value'] is not None else live_data['Drehmoment'],
+        'Laufzeit': live_data['Laufzeit'], # Assuming run_time is only in LiveData
+    }
+    # Add 'Anzahl eingefahren' and 'Anzahl ausgefahren' from a placeholder or actual logic if available
+    # For now, these are handled in mqtt_consumer.py's _process_and_notify_dashboard
+    real_motor_data['Anzahl_eingefahren'] = {'value': 'N/A', 'unit': ''}
+    real_motor_data['Anzahl_ausgefahren'] = {'value': 'N/A', 'unit': ''}
+
     digital_twin_data = get_latest_digital_twin()
 
-    dashboard_raw_data = get_latest_raw_data_for_dashboard()
     dashboard_feature_data = get_latest_feature_data_for_dashboard()
     dashboard_prediction_data = get_latest_prediction_data_for_dashboard()
-
-    # For the initial call when loading the page, a default status could be returned here,
-    # or the frontend waits for the first WebSocket update.
 
     # Retrieve the last 5 malfunction logs (if needed)
     latest_malfunction_logs = MalfunctionLog.objects.order_by('-timestamp')[:5]
@@ -259,7 +201,7 @@ def get_dashboard_data():
         'digital_twin_data': digital_twin_data,
         'anomaly_status': {"detected": False, "message": "Waiting for status update..."}, # Initial placeholder
         'malfunction_logs': malfunction_logs_serializable,
-        'raw_data': dashboard_raw_data,
+        'raw_data': raw_data_panel, # Keep this for completeness, though dashboard_update handles it directly
         'feature_data': dashboard_feature_data,
         'prediction_data': dashboard_prediction_data,
     }
@@ -302,10 +244,10 @@ def get_active_run_time_window():
 
 def get_plot_data(start_time=None, end_time=None):
     """
-    Retrieves LiveData and TwinData for a specific period and formats them for Chart.js.
+    Retrieves LiveData, TwinData, and RawData for a specific period and formats them for Chart.js.
     :param start_time: datetime object, start time for the data.
     :param end_time: datetime object, end time for the data. If None, up to now.
-    :return: Dictionary with formatted data for Live and Twin.
+    :return: Dictionary with formatted data for Live, Twin, and Raw.
     """
     live_data_queryset = LiveData.objects.all()
     twin_data_queryset = TwinData.objects.all() # TwinData for plots
@@ -340,11 +282,12 @@ def get_plot_data(start_time=None, end_time=None):
     # Each Chart.js dataset requires an array of {x: timestamp, y: value} objects.
     plot_data = {
         'live': {
-            'current': [], 'voltage': [], 'rpm': [], 'vibration': [], 'temp': []
+            'current': [], 'voltage': [], 'rpm': [], 'vibration': [], 'temp': [], 'torque': [] # Add torque to live for fallback
         },
         'twin': { # Twin data for plots
-            'current': [], 'voltage': [], 'rpm': [], 'vibration': [], 'temp': []
-        }, 'raw': {
+            'current': [], 'voltage': [], 'rpm': [], 'vibration': [], 'temp': [], 'torque': []
+        }, 
+        'raw': {
             'temperature': [], 'current': [], 'torque': []
         },
         'feature': {
@@ -366,6 +309,7 @@ def get_plot_data(start_time=None, end_time=None):
         if entry.rpm is not None: plot_data['live']['rpm'].append({'x': ts, 'y': entry.rpm})
         if entry.vibration is not None: plot_data['live']['vibration'].append({'x': ts, 'y': entry.vibration})
         if entry.temp is not None: plot_data['live']['temp'].append({'x': ts, 'y': entry.temp})
+        if entry.torque is not None: plot_data['live']['torque'].append({'x': ts, 'y': entry.torque}) # Add torque to live for fallback
 
     for entry in twin_data_queryset: # Iterate twin data
         ts = entry.timestamp.isoformat()
@@ -374,6 +318,7 @@ def get_plot_data(start_time=None, end_time=None):
         if entry.rpm is not None: plot_data['twin']['rpm'].append({'x': ts, 'y': entry.rpm})
         if entry.vibration is not None: plot_data['twin']['vibration'].append({'x': ts, 'y': entry.vibration})
         if entry.temp is not None: plot_data['twin']['temp'].append({'x': ts, 'y': entry.temp})
+        if entry.torque is not None: plot_data['twin']['torque'].append({'x': ts, 'y': entry.torque})
  
     # Process RawData
     for entry in raw_data_queryset:
@@ -427,7 +372,7 @@ def get_plot_data(start_time=None, end_time=None):
 
 def get_latest_plot_data_point():
     """
-    Retrieves the very latest LiveData and TwinData point and formats it.
+    Retrieves the very latest LiveData, TwinData, and RawData points and formats them.
     Useful for continuous live updates.
     """
     latest_live = LiveData.objects.order_by('-timestamp').first()
@@ -457,6 +402,7 @@ def get_latest_plot_data_point():
         if latest_live.rpm is not None: data_point['live']['rpm'] = {'x': ts, 'y': latest_live.rpm}
         if latest_live.vibration is not None: data_point['live']['vibration'] = {'x': ts, 'y': latest_live.vibration}
         if latest_live.temp is not None: data_point['live']['temp'] = {'x': ts, 'y': latest_live.temp}
+        if latest_live.torque is not None: data_point['live']['torque'] = {'x': ts, 'y': latest_live.torque} # Add torque to live for fallback
 
     if latest_twin: # Twin data
         ts = latest_twin.timestamp.isoformat()
@@ -465,6 +411,7 @@ def get_latest_plot_data_point():
         if latest_twin.rpm is not None: data_point['twin']['rpm'] = {'x': ts, 'y': latest_twin.rpm}
         if latest_twin.vibration is not None: data_point['twin']['vibration'] = {'x': ts, 'y': latest_twin.vibration}
         if latest_twin.temp is not None: data_point['twin']['temp'] = {'x': ts, 'y': latest_twin.temp}
+        if latest_twin.torque is not None: data_point['twin']['torque'] = {'x': ts, 'y': latest_twin.torque}
 
     if latest_raw_temp:
         ts = latest_raw_temp.timestamp.isoformat()
@@ -516,7 +463,6 @@ def get_latest_plot_data_point():
         if latest_prediction_torque.predicted_value is not None: data_point['prediction']['torque_predicted_value'] = {'x': ts, 'y': latest_prediction_torque.predicted_value}
         if latest_prediction_torque.anomaly_score is not None: data_point['prediction']['torque_anomaly_score'] = {'x': ts, 'y': latest_prediction_torque.anomaly_score}
         if latest_prediction_torque.rul_hours is not None: data_point['prediction']['torque_rul_hours'] = {'x': ts, 'y': latest_prediction_torque.rul_hours}
-
 
     return data_point
 

@@ -440,7 +440,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
                     logs_to_create.append({
                         'message_type': 'WARNING',
                         'description': f"{metric_name.capitalize()}-Abweichung > {deviation_threshold:.1f}% erkannt (Raw: {raw_value:.2f}, Twin: {twin_value:.2f})",
-                        'motor_state': 'unbekannt', # Oder basierend auf weiteren Daten bestimmen
+                        'motor_state': 'unbekannt', 
                         'emergency_stop_active': False
                     })
                     last_anomaly_state[metric_name] = True

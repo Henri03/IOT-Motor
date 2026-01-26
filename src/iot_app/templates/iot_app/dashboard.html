@@ -417,6 +417,16 @@
                             <h3>Strom- und Spannungsverlauf über die Zeit</h3>
                             <canvas id="real-current-voltage-chart"></canvas>
                         </div>
+                        <!-- Chart for real torque -->
+                        <div class="chart-wrapper">
+                            <h3>Drehmomentverlauf über die Zeit</h3>
+                            <canvas id="real-torque-chart"></canvas>
+                        </div>
+                        <!-- Chart for real temperature -->
+                        <div class="chart-wrapper">
+                            <h3>Temperaturverlauf über die Zeit</h3>
+                            <canvas id="real-temp-chart"></canvas>
+                        </div>
                         <!-- Chart for real RPM -->
                         <div class="chart-wrapper">
                             <h3>Drehzahlverlauf über die Zeit</h3>
@@ -426,11 +436,6 @@
                         <div class="chart-wrapper">
                             <h3>Vibrationsverlauf über die Zeit</h3>
                             <canvas id="real-vibration-chart"></canvas>
-                        </div>
-                        <!-- Chart for real temperature -->
-                        <div class="chart-wrapper">
-                            <h3>Temperaturverlauf über die Zeit</h3>
-                            <canvas id="real-temp-chart"></canvas>
                         </div>
                     </div>
                 </div>
@@ -470,6 +475,16 @@
                             <h3>Strom- und Spannungsverlauf über die Zeit (Modell)</h3>
                             <canvas id="dt-current-voltage-chart"></canvas>
                         </div>
+                        <!-- Chart for digital twin torque -->
+                        <div class="chart-wrapper">
+                            <h3>Drehmomentverlauf über die Zeit (Modell)</h3>
+                            <canvas id="dt-torque-chart"></canvas>
+                        </div>
+                        <!-- Chart for digital twin temperature -->
+                        <div class="chart-wrapper">
+                            <h3>Temperaturverlauf über die Zeit (Modell)</h3>
+                            <canvas id="dt-temp-chart"></canvas>
+                        </div>
                         <!-- Chart for digital twin RPM -->
                         <div class="chart-wrapper">
                             <h3>Drehzahlverlauf über die Zeit (Modell)</h3>
@@ -479,11 +494,6 @@
                         <div class="chart-wrapper">
                             <h3>Vibrationsverlauf über die Zeit (Modell)</h3>
                             <canvas id="dt-vibration-chart"></canvas>
-                        </div>
-                        <!-- Chart for digital twin temperature -->
-                        <div class="chart-wrapper">
-                            <h3>Temperaturverlauf über die Zeit (Modell)</h3>
-                            <canvas id="dt-temp-chart"></canvas>
                         </div>
                     </div>
                 </div>
@@ -537,6 +547,16 @@
                 twinChartId: 'dt-current-voltage-chart', twinDatasetIndex: 0,
                 yAxisID: 'y1'
             },
+            'torque': {
+                liveChartId: 'real-torque-chart', liveDatasetIndex: 0,
+                twinChartId: 'dt-torque-chart', twinDatasetIndex: 0,
+                yAxisID: 'y'
+            },
+            'temp': {
+                liveChartId: 'real-temp-chart', liveDatasetIndex: 0,
+                twinChartId: 'dt-temp-chart', twinDatasetIndex: 0,
+                yAxisID: 'y'
+            },
             'voltage': {
                 liveChartId: 'real-current-voltage-chart', liveDatasetIndex: 1,
                 twinChartId: 'dt-current-voltage-chart', twinDatasetIndex: 1,
@@ -550,11 +570,6 @@
             'vibration': {
                 liveChartId: 'real-vibration-chart', liveDatasetIndex: 0,
                 twinChartId: 'dt-vibration-chart', twinDatasetIndex: 0,
-                yAxisID: 'y'
-            },
-            'temp': {
-                liveChartId: 'real-temp-chart', liveDatasetIndex: 0,
-                twinChartId: 'dt-temp-chart', twinDatasetIndex: 0,
                 yAxisID: 'y'
             }
         };
@@ -765,20 +780,38 @@
             });
 
             // Populate real motor charts with historical data
-            if (plotData.live) {
-                charts['real-current-voltage-chart'].data.datasets[0].data = plotData.live.current.map(p => ({x: new Date(p.x), y: p.y}));
-                charts['real-current-voltage-chart'].data.datasets[1].data = plotData.live.voltage.map(p => ({x: new Date(p.x), y: p.y}));
-                charts['real-rpm-chart'].data.datasets[0].data = plotData.live.rpm.map(p => ({x: new Date(p.x), y: p.y}));
-                charts['real-vibration-chart'].data.datasets[0].data = plotData.live.vibration.map(p => ({x: new Date(p.x), y: p.y}));
-                charts['real-temp-chart'].data.datasets[0].data = plotData.live.temp.map(p => ({x: new Date(p.x), y: p.y}));
+            // Prioritize raw data for current, temperature, torque
+            if (plotData.raw) {
+                if (plotData.raw.current) charts['real-current-voltage-chart'].data.datasets[0].data = plotData.raw.current.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.raw.temperature) charts['real-temp-chart'].data.datasets[0].data = plotData.raw.temperature.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.raw.torque) charts['real-torque-chart'].data.datasets[0].data = plotData.raw.torque.map(p => ({x: new Date(p.x), y: p.y}));
             }
+            // Use live data for voltage, rpm, vibration, and as fallback for current/temp/torque if raw is missing
+            if (plotData.live) {
+                if (plotData.live.voltage) charts['real-current-voltage-chart'].data.datasets[1].data = plotData.live.voltage.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.live.rpm) charts['real-rpm-chart'].data.datasets[0].data = plotData.live.rpm.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.live.vibration) charts['real-vibration-chart'].data.datasets[0].data = plotData.live.vibration.map(p => ({x: new Date(p.x), y: p.y}));
+                
+                // Fallback for current, temp, torque if raw data was not available
+                if (!plotData.raw || !plotData.raw.current) {
+                    if (plotData.live.current) charts['real-current-voltage-chart'].data.datasets[0].data = plotData.live.current.map(p => ({x: new Date(p.x), y: p.y}));
+                }
+                if (!plotData.raw || !plotData.raw.temperature) {
+                    if (plotData.live.temp) charts['real-temp-chart'].data.datasets[0].data = plotData.live.temp.map(p => ({x: new Date(p.x), y: p.y}));
+                }
+                if (!plotData.raw || !plotData.raw.torque) {
+                    if (plotData.live.torque) charts['real-torque-chart'].data.datasets[0].data = plotData.live.torque.map(p => ({x: new Date(p.x), y: p.y}));
+                }
+            }
+
             // Populate digital twin charts with historical data
             if (plotData.twin) {
-                charts['dt-current-voltage-chart'].data.datasets[0].data = plotData.twin.current.map(p => ({x: new Date(p.x), y: p.y}));
-                charts['dt-current-voltage-chart'].data.datasets[1].data = plotData.twin.voltage.map(p => ({x: new Date(p.x), y: p.y}));
-                charts['dt-rpm-chart'].data.datasets[0].data = plotData.twin.rpm.map(p => ({x: new Date(p.x), y: p.y}));
-                charts['dt-vibration-chart'].data.datasets[0].data = plotData.twin.vibration.map(p => ({x: new Date(p.x), y: p.y}));
-                charts['dt-temp-chart'].data.datasets[0].data = plotData.twin.temp.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.twin.current) charts['dt-current-voltage-chart'].data.datasets[0].data = plotData.twin.current.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.twin.voltage) charts['dt-current-voltage-chart'].data.datasets[1].data = plotData.twin.voltage.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.twin.rpm) charts['dt-rpm-chart'].data.datasets[0].data = plotData.twin.rpm.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.twin.vibration) charts['dt-vibration-chart'].data.datasets[0].data = plotData.twin.vibration.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.twin.temp) charts['dt-temp-chart'].data.datasets[0].data = plotData.twin.temp.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.twin.torque) charts['dt-torque-chart'].data.datasets[0].data = plotData.twin.torque.map(p => ({x: new Date(p.x), y: p.y}));
             }
 
             // Update chart X-axis scales based on the historical time range
@@ -824,32 +857,52 @@
                 chart.data.datasets.forEach(dataset => {
                     let metricKey;
                     let sourceData;
+                    let value;
+                    let timestamp;
 
                     // Determine the metric key based on the dataset label
                     if (dataset.label.includes('Strom')) {
                         metricKey = 'current';
                     } else if (dataset.label.includes('Spannung')) {
                         metricKey = 'voltage';
+                    } else if (dataset.label.includes('Drehmoment')) { 
+                        metricKey = 'torque';
+                    } else if (dataset.label.includes('Temperatur')) {
+                        metricKey = 'temperature';
                     } else if (dataset.label.includes('Drehzahl')) {
                         metricKey = 'rpm';
                     } else if (dataset.label.includes('Vibration')) {
                         metricKey = 'vibration';
-                    } else if (dataset.label.includes('Temperatur')) {
-                        metricKey = 'temp';
                     } else {
                         return; // Skip if metric key cannot be determined
                     }
 
-                    // Determine if the data comes from live or digital twin source
-                    if (dataset.label.includes('Modell')) {
+                    if (dataset.label.includes('Modell')) { // Digital Twin data
                         sourceData = dataPoint.twin;
-                    } else {
-                        sourceData = dataPoint.live;
+                        if (sourceData && sourceData[metricKey]) {
+                            value = sourceData[metricKey].y;
+                            timestamp = new Date(sourceData[metricKey].x);
+                        }
+                    } else { // Real motor data
+                        // Prioritize raw data for current, temperature, torque
+                        if (metricKey === 'current' || metricKey === 'temperature' || metricKey === 'torque') {
+                            if (dataPoint.raw && dataPoint.raw[metricKey]) {
+                                value = dataPoint.raw[metricKey].y;
+                                timestamp = new Date(dataPoint.raw[metricKey].x);
+                            } else if (dataPoint.live && dataPoint.live[metricKey]) { // Fallback to live
+                                value = dataPoint.live[metricKey].y;
+                                timestamp = new Date(dataPoint.live[metricKey].x);
+                            }
+                        } else { // Use live data for other metrics (voltage, rpm, vibration)
+                            if (dataPoint.live && dataPoint.live[metricKey]) {
+                                value = dataPoint.live[metricKey].y;
+                                timestamp = new Date(dataPoint.live[metricKey].x);
+                            }
+                        }
                     }
 
-                    // If source data and metric exist, add the new point
-                    if (sourceData && sourceData[metricKey]) {
-                        const newPoint = { x: new Date(sourceData[metricKey].x), y: sourceData[metricKey].y };
+                    if (value !== undefined && timestamp) {
+                        const newPoint = { x: timestamp, y: value };
                         dataset.data.push(newPoint);
                     }
 
@@ -931,6 +984,17 @@
                     }
                 }
             });
+            // Initialize real motor torque chart
+            initializeChart('real-torque-chart', 'Drehmomentverlauf über die Zeit', [
+                { label: 'Drehmoment (Nm)', borderColor: 'rgb(255, 159, 64)' }
+            ], {
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Drehmoment (Nm)' },
+                        beginAtZero: false
+                    }
+                }
+            });
 
             // Initialize digital twin current and voltage chart with dashed lines
             initializeChart('dt-current-voltage-chart', 'Strom- und Spannungsverlauf über die Zeit (Modell)', [
@@ -939,7 +1003,7 @@
             ], {
                 scales: {
                     y1: {
-                        position: 'left',
+                        position: 'left', 
                         title: { display: true, text: 'Strom (A)' },
                         beginAtZero: false
                     },
@@ -985,11 +1049,25 @@
                     }
                 }
             });
+            // Initialize digital twin torque chart with dashed lines
+            initializeChart('dt-torque-chart', 'Drehmomentverlauf über die Zeit (Modell)', [
+                { label: 'Drehmoment (Nm) - Modell', borderColor: 'rgb(255, 159, 64)', borderDash: [5, 5] }
+            ], {
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Drehmoment (Nm)' },
+                        beginAtZero: false
+                    }
+                }
+            });
         });
 
         // WebSocket onopen event handler
         socket.onopen = function(e) {
             console.log("WebSocket connection established.");
+            socket.send(JSON.stringify({
+                type: 'request_initial_data'
+            }));
         };
 
         // WebSocket onmessage event handler

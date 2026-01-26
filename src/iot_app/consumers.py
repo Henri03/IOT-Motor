@@ -9,10 +9,12 @@ import json                                                                     
 from channels.generic.websocket import AsyncWebsocketConsumer                               # grundlegende Struktur und Methoden für die WebSocket-Kommunikation
 from asgiref.sync import sync_to_async                                                      # synchrone Funktionen (wie Django ORM-Aufrufe) sicher in einem asynchronen Kontext auszuführen
 from django.utils import timezone                                                           
-from datetime import datetime
+from datetime import datetime, timedelta
+import asyncio
+import pytz
 
 from .models import MotorInfo, LiveData, TwinData, MalfunctionLog, RawData, FeatureData, PredictionData # Importiert Django-Modelle, die die IOT-Anwendung definieren
-from .utils import get_dashboard_data, to_serializable_dict                                 # Hilfsfunktionen, die die Logik zum Abrufen und Verarbeiten von Daten aus der Datenbank kapseln
+from .utils import get_dashboard_data, to_serializable_dict                                 # Hilfsfunktionen, die die Logik zum Abrufen und Verarbeiten von Daten aus der Datenbank kapselt
 from .utils import get_active_run_time_window, get_plot_data, get_latest_plot_data_point    # 
 
 class DashboardConsumer(AsyncWebsocketConsumer):
@@ -124,9 +126,17 @@ class DashboardConsumer(AsyncWebsocketConsumer):
 
     @sync_to_async
     def _get_active_run_time_window(self):
-        """Wrapper for get_active_run_time_window utility function."""
-        return get_active_run_time_window()
-
+        """
+        Wrapper for get_active_run_time_window utility function.
+        Returns the time window of the active run, or the last 10 minutes if no active run.
+        """
+        start_time, end_time = get_active_run_time_window()
+        if not start_time and not end_time:
+            # If no active run is detected, default to the last 10 minutes
+            end_time = timezone.now()
+            start_time = end_time - timedelta(minutes=10)
+        return start_time, end_time
+    
     @sync_to_async
     def _get_plot_data(self, start_time, end_time):
         """Wrapper for get_plot_data utility function."""
@@ -141,19 +151,30 @@ class DashboardConsumer(AsyncWebsocketConsumer):
     async def send_plot_data(self, start_time=None, end_time=None, plot_type='initial_historical'):
         """
         Fetches plot data for a given period and sends it to the client.
-        If start_time and end_time are not provided, it determines the active run time window.
+        If start_time and end_time are not provided, it determines the active run time window
+        or defaults to the last 10 minutes.
         """
+        current_plot_type = plot_type
+
         if start_time is None or end_time is None:
-            # If no specific time range is provided, get the active run time window
+            # If no specific time range is provided by the client,
+            # use the default logic to get the active run time window or last 10 minutes.
             start_time, end_time = await self._get_active_run_time_window()
-            plot_type = 'initial_historical' # Set plot_type for this case
+            current_plot_type = 'initial_historical' # This indicates it's the default view
+
+        # Ensure start_time and end_time are not None before passing to _get_plot_data
+        if start_time is None or end_time is None:
+            # Fallback if _get_active_run_time_window also returns None
+            end_time = timezone.now()
+            start_time = end_time - timedelta(minutes=10)
+            current_plot_type = 'initial_historical'
 
         plot_data = await self._get_plot_data(start_time, end_time)
         
         serializable_plot_data = to_serializable_dict(plot_data)
         await self.send(text_data=json.dumps({
             'type': 'plot_data_update',
-            'plot_type': plot_type,
+            'plot_type': current_plot_type,
             'data': serializable_plot_data,
             'start_time': start_time.isoformat() if start_time else None,
             'end_time': end_time.isoformat() if end_time else None,
@@ -162,10 +183,16 @@ class DashboardConsumer(AsyncWebsocketConsumer):
     async def send_latest_plot_data_point(self):
         """
         Fetches the very latest plot data point and sends it to the client.
+        This is used for continuously adding new data to the live plot.
         """
         latest_data_point = await self._get_latest_plot_data_point()
-        serializable_data_point = to_serializable_dict(latest_data_point)
-        await self.send(text_data=json.dumps({
-            'type': 'plot_data_point_update', # A new type for single point updates
-            'data': serializable_data_point,
-        }))
+        
+        # Only send if there is actual new data
+        if latest_data_point and (latest_data_point.get('live') or latest_data_point.get('twin') or latest_data_point.get('raw')):
+            serializable_data_point = to_serializable_dict(latest_data_point)
+            await self.send(text_data=json.dumps({
+                'type': 'plot_data_point', 
+                'data': serializable_data_point,
+            }))
+        else:
+            print("No new plot data point available to send.")
