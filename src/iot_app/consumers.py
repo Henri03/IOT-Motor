@@ -11,7 +11,7 @@ from asgiref.sync import sync_to_async                                          
 from django.utils import timezone                                                           
 from datetime import datetime, timedelta
 import asyncio
-import pytz
+import pytz # Import pytz for explicit timezone handling
 
 from .models import MotorInfo, LiveData, TwinData, MalfunctionLog, RawData, FeatureData, PredictionData # Importiert Django-Modelle, die die IOT-Anwendung definieren
 from .utils import get_dashboard_data, to_serializable_dict                                 # Hilfsfunktionen, die die Logik zum Abrufen und Verarbeiten von Daten aus der Datenbank kapselt
@@ -59,14 +59,23 @@ class DashboardConsumer(AsyncWebsocketConsumer):
                 start_time_str = text_data_json.get('start_time')
                 end_time_str = text_data_json.get('end_time')
 
-                start_time = datetime.fromisoformat(start_time_str) if start_time_str else None
-                end_time = datetime.fromisoformat(end_time_str) if end_time_str else None
+                start_time = None
+                end_time = None
 
-                # Ensure timestamps are timezone-aware
-                if start_time and start_time.tzinfo is None:
-                    start_time = timezone.make_aware(start_time)
-                if end_time and end_time.tzinfo is None:
-                    end_time = timezone.make_aware(end_time)
+                if start_time_str:
+                    # Ensure timezone-aware datetime objects
+                    start_time = datetime.fromisoformat(start_time_str)
+                    if start_time.tzinfo is None:
+                        start_time = timezone.make_aware(start_time)
+                
+                # Handle 'live' keyword for end_time
+                if end_time_str == 'live':
+                    end_time = 'live' # Pass 'live' keyword to send_plot_data
+                elif end_time_str:
+                    # Ensure timezone-aware datetime objects
+                    end_time = datetime.fromisoformat(end_time_str)
+                    if end_time.tzinfo is None:
+                        end_time = timezone.make_aware(end_time)
 
                 await self.send_plot_data(start_time, end_time, plot_type='historical_range')
             elif message_type == 'request_initial_data':
@@ -155,19 +164,36 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         or defaults to the last 10 minutes.
         """
         current_plot_type = plot_type
+        
+        # If end_time is 'live', calculate it dynamically
+        dynamic_end_time = None
+        if end_time == 'live':
+            dynamic_end_time = timezone.now()
+            # If start_time is not provided with 'live' end_time, calculate a default window
+            if start_time is None:
+                start_time = dynamic_end_time - timedelta(minutes=10) # Default to last 10 minutes
+            end_time = dynamic_end_time # Use the dynamically calculated end_time for fetching data
 
-        if start_time is None or end_time is None:
-            # If no specific time range is provided by the client,
-            # use the default logic to get the active run time window or last 10 minutes.
+        # If no specific time range is provided by the client,
+        # use the default logic to get the active run time window or last 10 minutes.
+        if start_time is None and end_time is None:
             start_time, end_time = await self._get_active_run_time_window()
             current_plot_type = 'initial_historical' # This indicates it's the default view
 
         # Ensure start_time and end_time are not None before passing to _get_plot_data
+        # If _get_active_run_time_window returns (None, None), set a default 10-minute window
         if start_time is None or end_time is None:
-            # Fallback if _get_active_run_time_window also returns None
+            # Fallback if _get_active_run_time_window also returns None or partial None
             end_time = timezone.now()
             start_time = end_time - timedelta(minutes=10)
-            current_plot_type = 'initial_historical'
+            current_plot_type = 'initial_historical' # Ensure type is initial if we're defaulting
+
+        # Ensure all datetime objects are timezone-aware before passing to _get_plot_data
+        # and before serializing to ISO format.
+        if start_time and not timezone.is_aware(start_time):
+            start_time = timezone.make_aware(start_time)
+        if end_time and not timezone.is_aware(end_time):
+            end_time = timezone.make_aware(end_time)
 
         plot_data = await self._get_plot_data(start_time, end_time)
         

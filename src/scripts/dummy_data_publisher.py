@@ -5,6 +5,7 @@ import random
 import datetime
 import os
 import statistics
+from pytz import utc # Import UTC timezone
 
 # MQTT Broker settings
 BROKER_ADDRESS = os.getenv('DOCKER_MQTT_BROKER_HOST', 'localhost')
@@ -63,8 +64,11 @@ def generate_live_data():
             emergency_stop = True
             motor_state = "emergency_stop"
 
+    # Ensure timestamp is UTC and timezone-aware
+    timestamp_utc = datetime.datetime.now(utc).isoformat()
+
     data = {
-        "timestamp": datetime.datetime.now().isoformat(),
+        "timestamp": timestamp_utc,
         "current": current,
         "voltage": voltage,
         "rpm": rpm,
@@ -108,8 +112,11 @@ def generate_twin_data(live_data_payload):
     if live_data_payload.get('temp') is not None and live_data_payload['temp'] > 70:
         temp = round(random.uniform(50.0, 70.0) + random.gauss(0, 0.5), 2)
 
+    # Ensure timestamp is UTC and timezone-aware
+    timestamp_utc = datetime.datetime.now(utc).isoformat()
+
     data = {
-        "timestamp": datetime.datetime.now().isoformat(),
+        "timestamp": timestamp_utc,
         "current": current,
         "voltage": voltage,
         "rpm": rpm,
@@ -164,11 +171,14 @@ def generate_prediction_data(metric_value):
     # Dummy prediction of remaining useful life (in hours)
     rul = round(random.uniform(100, 5000), 0)
 
+    # Ensure timestamp is UTC and timezone-aware
+    timestamp_utc = datetime.datetime.now(utc).isoformat()
+
     prediction = {
         "predicted_value": predicted_value,
         "anomaly_score": anomaly_score,
         "rul_hours": rul,
-        "timestamp": datetime.datetime.now().isoformat(),
+        "timestamp": timestamp_utc,
     }
     return prediction
 
@@ -194,8 +204,9 @@ def publish_data():
             live_data_payload = generate_live_data()
             twin_data_payload = generate_twin_data(live_data_payload)
 
-            #client.publish(TOPIC_LIVE, json.dumps(live_data_payload))
-            #print(f"Published Live Data: {live_data_payload}")
+            # Publish Live Data (UNCOMMENTED)
+            client.publish(TOPIC_LIVE, json.dumps(live_data_payload))
+            print(f"Published Live Data: {live_data_payload}")
 
             client.publish(TOPIC_TWIN, json.dumps(twin_data_payload))
             print(f"Published Twin Data: {twin_data_payload}")
@@ -205,44 +216,51 @@ def publish_data():
             raw_current = live_data_payload.get('current')
             raw_torque = live_data_payload.get('torque')
             
-            current_timestamp = datetime.datetime.now().isoformat()
+            # Ensure timestamp is UTC and timezone-aware
+            current_timestamp_utc = datetime.datetime.now(utc).isoformat()
 
             # Publish Raw Data
             if raw_temp is not None:
-                client.publish(TOPIC_RAW_TEMPERATURE, json.dumps({"timestamp": current_timestamp, "value": raw_temp}))
+                client.publish(TOPIC_RAW_TEMPERATURE, json.dumps({"timestamp": current_timestamp_utc, "value": raw_temp}))
                 print(f"Published Raw Temperature: {raw_temp}")
             if raw_current is not None:
-                client.publish(TOPIC_RAW_CURRENT, json.dumps({"timestamp": current_timestamp, "value": raw_current}))
+                client.publish(TOPIC_RAW_CURRENT, json.dumps({"timestamp": current_timestamp_utc, "value": raw_current}))
                 print(f"Published Raw Current: {raw_current}")
             if raw_torque is not None:
-                client.publish(TOPIC_RAW_TORQUE, json.dumps({"timestamp": current_timestamp, "value": raw_torque}))
+                client.publish(TOPIC_RAW_TORQUE, json.dumps({"timestamp": current_timestamp_utc, "value": raw_torque}))
                 print(f"Published Raw Torque: {raw_torque}")
 
             # Publish Feature Data (using live data values as a base for feature calculation)
             if raw_temp is not None:
                 feature_temp_payload = generate_feature_data(raw_temp)
+                feature_temp_payload["timestamp"] = current_timestamp_utc 
                 client.publish(TOPIC_FEATURE_TEMPERATURE, json.dumps(feature_temp_payload))
                 print(f"Published Feature Temperature: {feature_temp_payload}")
             if raw_current is not None:
                 feature_current_payload = generate_feature_data(raw_current)
+                feature_current_payload["timestamp"] = current_timestamp_utc 
                 client.publish(TOPIC_FEATURE_CURRENT, json.dumps(feature_current_payload))
                 print(f"Published Feature Current: {feature_current_payload}")
             if raw_torque is not None:
                 feature_torque_payload = generate_feature_data(raw_torque)
+                feature_torque_payload["timestamp"] = current_timestamp_utc 
                 client.publish(TOPIC_FEATURE_TORQUE, json.dumps(feature_torque_payload))
                 print(f"Published Feature Torque: {feature_torque_payload}")
 
             # Publish Prediction Data (using live data values as a base for prediction)
             if raw_temp is not None:
                 prediction_temp_payload = generate_prediction_data(raw_temp)
+               
                 client.publish(TOPIC_PREDICTION_TEMPERATURE, json.dumps(prediction_temp_payload))
                 print(f"Published Prediction Temperature: {prediction_temp_payload}")
             if raw_current is not None:
                 prediction_current_payload = generate_prediction_data(raw_current)
+               
                 client.publish(TOPIC_PREDICTION_CURRENT, json.dumps(prediction_current_payload))
                 print(f"Published Prediction Current: {prediction_current_payload}")
             if raw_torque is not None:
                 prediction_torque_payload = generate_prediction_data(raw_torque)
+               
                 client.publish(TOPIC_PREDICTION_TORQUE, json.dumps(prediction_torque_payload))
                 print(f"Published Prediction Torque: {prediction_torque_payload}")
 

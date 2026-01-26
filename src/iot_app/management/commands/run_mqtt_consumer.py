@@ -13,18 +13,21 @@ import asyncio
 import pytz
 
 # Utility function to make naive datetimes timezone-aware
-def make_aware_from_iso(timestamp_str):
+def make_aware_from_iso(iso_string):
     """
-    Parses an ISO 8601 datetime string and makes it timezone-aware.
-    Assumes the input string represents a datetime in UTC.
+    Parses an ISO formatted string to a datetime object and ensures it's timezone-aware (UTC).
+    If the string already contains timezone info, it will be parsed as aware.
+    If it's naive, it will be made aware with UTC.
     """
-    if not timestamp_str:
-        return timezone.now()
-    
-    # Parse the string into a naive datetime object
-    naive_dt = datetime.fromisoformat(timestamp_str)
-
-    return timezone.make_aware(naive_dt, pytz.utc)
+    if not iso_string:
+        return None
+    dt_object = datetime.fromisoformat(iso_string)
+    if timezone.is_aware(dt_object):
+        # If the datetime object is already timezone-aware, ensure it's in UTC
+        return dt_object.astimezone(pytz.utc)
+    else:
+        # If it's naive, make it timezone-aware with UTC
+        return timezone.make_aware(dt_object, pytz.utc)
 
 class Command(BaseCommand):             # erlaubt es, das Skript mit 'python manage.py mqtt_consumer' in der Datei "docker-compose.yml" auszuführen.
     help = 'Startet einen MQTT-Consumer, um Sensordaten zu empfangen und in der Datenbank zu speichern.'

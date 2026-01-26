@@ -73,9 +73,14 @@ def get_latest_raw_data_for_dashboard():
         'torque': RawData.objects.filter(metric_type='torque').order_by('-timestamp').first(),
     }
     dashboard_raw_data = {
-        metric: {'value': getattr(data, 'value', None), 'timestamp': getattr(data, 'timestamp', None)}
+        metric: {'value': getattr(data, 'value', None), 'unit': '', 'timestamp': getattr(data, 'timestamp', None)} # Added 'unit' and 'timestamp'
         for metric, data in latest_raw_data.items()
     }
+    # Populate units for display in the dashboard panel
+    if dashboard_raw_data['temperature']['value'] is not None: dashboard_raw_data['temperature']['unit'] = '°C'
+    if dashboard_raw_data['current']['value'] is not None: dashboard_raw_data['current']['unit'] = 'A'
+    if dashboard_raw_data['torque']['value'] is not None: dashboard_raw_data['torque']['unit'] = 'Nm'
+
     return dashboard_raw_data
 
 def get_latest_feature_data_for_dashboard():
@@ -213,7 +218,7 @@ def get_active_run_time_window():
     Looks for the last "motor starts" or "motor stops" and the subsequent "end position reached".
     Returns (start_time, end_time). end_time is None if the motor is still running.
     """
-    # Find the last start event (motor starts/stops)
+    # Find the last start event (motor fährt ein/aus)
     latest_start_event = MalfunctionLog.objects.filter(
         Q(description__icontains='motor fährt ein') | Q(description__icontains='motor fährt aus'),
         message_type='INFO'
@@ -225,7 +230,7 @@ def get_active_run_time_window():
     if latest_start_event:
         start_time = latest_start_event.timestamp
 
-        # Find the first stop event ("end position reached") AFTER the last start event
+        # Find the first stop event ("Endlage erreicht") AFTER the last start event
         latest_stop_event_after_start = MalfunctionLog.objects.filter(
             Q(description__icontains='Endlage erreicht'),
             message_type='INFO',
@@ -239,6 +244,12 @@ def get_active_run_time_window():
             # The motor started, but has not yet reached an end position.
             # So it is still running, end_time is None (for now).
             end_time = None
+    
+    # Ensure start_time and end_time are timezone-aware if they are not None
+    if start_time and not timezone.is_aware(start_time):
+        start_time = timezone.make_aware(start_time)
+    if end_time and not timezone.is_aware(end_time):
+        end_time = timezone.make_aware(end_time)
 
     return start_time, end_time
 
@@ -263,12 +274,29 @@ def get_plot_data(start_time=None, end_time=None):
         prediction_data_queryset = prediction_data_queryset.filter(timestamp__gte=start_time)
 
     # If no end_time is given, we fetch data up to the current time
-    if end_time:
-        live_data_queryset = live_data_queryset.filter(timestamp__lte=end_time)
-        twin_data_queryset = twin_data_queryset.filter(timestamp__lte=end_time)
-        raw_data_queryset = raw_data_queryset.filter(timestamp__lte=end_time)
-        feature_data_queryset = feature_data_queryset.filter(timestamp__lte=end_time)
-        prediction_data_queryset = prediction_data_queryset.filter(timestamp__lte=end_time)
+    if end_time: # end_time could be a datetime object or the string 'live'
+        if isinstance(end_time, datetime):
+            live_data_queryset = live_data_queryset.filter(timestamp__lte=end_time)
+            twin_data_queryset = twin_data_queryset.filter(timestamp__lte=end_time)
+            raw_data_queryset = raw_data_queryset.filter(timestamp__lte=end_time)
+            feature_data_queryset = feature_data_queryset.filter(timestamp__lte=end_time)
+            prediction_data_queryset = prediction_data_queryset.filter(timestamp__lte=end_time)
+        # If end_time is 'live', we don't filter by an upper bound, as the frontend will handle the "live" window
+        # For historical data requests, 'live' as end_time means "up to now".
+        elif end_time == 'live':
+            current_time = timezone.now()
+            live_data_queryset = live_data_queryset.filter(timestamp__lte=current_time)
+            twin_data_queryset = twin_data_queryset.filter(timestamp__lte=current_time)
+            raw_data_queryset = raw_data_queryset.filter(timestamp__lte=current_time)
+            feature_data_queryset = feature_data_queryset.filter(timestamp__lte=current_time)
+            prediction_data_queryset = prediction_data_queryset.filter(timestamp__lte=current_time)
+    else: # If end_time is None, it means up to current time
+        current_time = timezone.now()
+        live_data_queryset = live_data_queryset.filter(timestamp__lte=current_time)
+        twin_data_queryset = twin_data_queryset.filter(timestamp__lte=current_time)
+        raw_data_queryset = raw_data_queryset.filter(timestamp__lte=current_time)
+        feature_data_queryset = feature_data_queryset.filter(timestamp__lte=current_time)
+        prediction_data_queryset = prediction_data_queryset.filter(timestamp__lte=current_time)
 
     
 
@@ -413,6 +441,7 @@ def get_latest_plot_data_point():
         if latest_twin.temp is not None: data_point['twin']['temp'] = {'x': ts, 'y': latest_twin.temp}
         if latest_twin.torque is not None: data_point['twin']['torque'] = {'x': ts, 'y': latest_twin.torque}
 
+    # Ensure raw data points have 'x' and 'y' keys
     if latest_raw_temp:
         ts = latest_raw_temp.timestamp.isoformat()
         if latest_raw_temp.value is not None: data_point['raw']['temperature'] = {'x': ts, 'y': latest_raw_temp.value}
