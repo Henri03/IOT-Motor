@@ -207,12 +207,13 @@ def publish_data():
             live_data_payload = generate_live_data()
             twin_data_payload = generate_twin_data(live_data_payload)
 
-            # Publish Live Data (UNCOMMENTED)
+            # Publish Live Data 
             # client.publish(TOPIC_LIVE, json.dumps(live_data_payload))
             # print(f"[MQTT] Gesendet → Topic: {TOPIC_LIVE} | Payload: {json.dumps(live_data_payload)}")
 
-            # client.publish(TOPIC_TWIN, json.dumps(twin_data_payload))
-            # print(f"[MQTT] Gesendet → Topic: {TOPIC_TWIN} | Payload: {json.dumps(twin_data_payload)}")
+             # Publish Twin Data 
+            client.publish(TOPIC_TWIN, json.dumps(twin_data_payload))
+            print(f"[MQTT] Gesendet → Topic: {TOPIC_TWIN} | Payload: {json.dumps(twin_data_payload)}")
 
             # Extract relevant values for Raw Data
             raw_temp = live_data_payload.get('temp')

@@ -253,13 +253,14 @@ def get_active_run_time_window():
 
 def get_plot_data(start_time=None, end_time=None):
     """
-    Retrieves LiveData, TwinData, and RawData for a specific period and formats them for Chart.js.
+    Retrieves LiveData, TwinData, RawData, FeatureData, and PredictionData for a specific period
+    and formats them for Chart.js, including prediction status for raw data points.
     :param start_time: datetime object, start time for the data.
     :param end_time: datetime object, end time for the data. If None, up to now.
-    :return: Dictionary with formatted data for Live, Twin, and Raw.
+    :return: Dictionary with formatted data for Live, Twin, Raw, Feature, and Prediction.
     """
     live_data_queryset = LiveData.objects.all()
-    twin_data_queryset = TwinData.objects.all() # TwinData for plots
+    twin_data_queryset = TwinData.objects.all()
     raw_data_queryset = RawData.objects.all()
     feature_data_queryset = FeatureData.objects.all()
     prediction_data_queryset = PredictionData.objects.all()
@@ -271,16 +272,13 @@ def get_plot_data(start_time=None, end_time=None):
         feature_data_queryset = feature_data_queryset.filter(timestamp__gte=start_time)
         prediction_data_queryset = prediction_data_queryset.filter(timestamp__gte=start_time)
 
-    # If no end_time is given, we fetch data up to the current time
-    if end_time: # end_time could be a datetime object or the string 'live'
+    if end_time:
         if isinstance(end_time, datetime):
             live_data_queryset = live_data_queryset.filter(timestamp__lte=end_time)
             twin_data_queryset = twin_data_queryset.filter(timestamp__lte=end_time)
             raw_data_queryset = raw_data_queryset.filter(timestamp__lte=end_time)
             feature_data_queryset = feature_data_queryset.filter(timestamp__lte=end_time)
             prediction_data_queryset = prediction_data_queryset.filter(timestamp__lte=end_time)
-        # If end_time is 'live', we don't filter by an upper bound, as the frontend will handle the "live" window
-        # For historical data requests, 'live' as end_time means "up to now".
         elif end_time == 'live':
             current_time = timezone.now()
             live_data_queryset = live_data_queryset.filter(timestamp__lte=current_time)
@@ -288,7 +286,7 @@ def get_plot_data(start_time=None, end_time=None):
             raw_data_queryset = raw_data_queryset.filter(timestamp__lte=current_time)
             feature_data_queryset = feature_data_queryset.filter(timestamp__lte=current_time)
             prediction_data_queryset = prediction_data_queryset.filter(timestamp__lte=current_time)
-    else: # If end_time is None, it means up to current time
+    else:
         current_time = timezone.now()
         live_data_queryset = live_data_queryset.filter(timestamp__lte=current_time)
         twin_data_queryset = twin_data_queryset.filter(timestamp__lte=current_time)
@@ -296,49 +294,53 @@ def get_plot_data(start_time=None, end_time=None):
         feature_data_queryset = feature_data_queryset.filter(timestamp__lte=current_time)
         prediction_data_queryset = prediction_data_queryset.filter(timestamp__lte=current_time)
 
-    
-
     live_data_queryset = live_data_queryset.order_by('timestamp')
     twin_data_queryset = twin_data_queryset.order_by('timestamp')
     raw_data_queryset = raw_data_queryset.order_by('timestamp')
     feature_data_queryset = feature_data_queryset.order_by('timestamp')
     prediction_data_queryset = prediction_data_queryset.order_by('timestamp')
 
-    # Formatting data for Chart.js
-    # Each Chart.js dataset requires an array of {x: timestamp, y: value} objects.
     plot_data = {
         'live': {
-            'current': [], 'voltage': [], 'rpm': [], 'vibration': [], 'temp': [], 'torque': [] # Add torque to live for fallback
+            'current': [], 'voltage': [], 'rpm': [], 'vibration': [], 'temp': [], 'torque': []
         },
-        'twin': { # Twin data for plots
+        'twin': {
             'current': [], 'voltage': [], 'rpm': [], 'vibration': [], 'temp': [], 'torque': []
         }, 
         'raw': {
             'temperature': [], 'current': [], 'torque': []
         },
         'feature': {
-            'temperature_mean': [], 'temperature_min': [], 'temperature_max': [], 'temperature_median': [], 'temperature_std': [], 'temperature_range': [],
-            'current_mean': [], 'current_min': [], 'current_max': [], 'current_median': [], 'current_std': [], 'current_range': [],
-            'torque_mean': [], 'torque_min': [], 'torque_max': [], 'torque_median': [], 'torque_std': [], 'torque_range': [],
+            'temperature_mean': [], 'temperature_min': [], 'temperature_max': [], 'temperature_median': [], 'temperature_std': [],
+            'current_mean': [], 'current_min': [], 'current_max': [], 'current_median': [], 'current_std': [],
+            'torque_mean': [], 'torque_min': [], 'torque_max': [], 'torque_median': [], 'torque_std': [],
         },
         'prediction': {
-            # Updated to use status_value instead of predicted_value, anomaly_score, rul_hours
             'temperature_status_value': [], 
             'current_status_value': [], 
             'torque_status_value': [],
         }
     }
 
+    # Fetch all prediction data for efficient lookup
+    predictions_by_metric_and_time = {}
+    for pred_entry in prediction_data_queryset:
+        metric_type = pred_entry.metric_type
+        timestamp_key = pred_entry.timestamp.isoformat()
+        if metric_type not in predictions_by_metric_and_time:
+            predictions_by_metric_and_time[metric_type] = {}
+        predictions_by_metric_and_time[metric_type][timestamp_key] = pred_entry.status_value
+
     for entry in live_data_queryset:
-        ts = entry.timestamp.isoformat() # ISO format is good for JavaScript Date objects
+        ts = entry.timestamp.isoformat()
         if entry.current is not None: plot_data['live']['current'].append({'x': ts, 'y': entry.current})
         if entry.voltage is not None: plot_data['live']['voltage'].append({'x': ts, 'y': entry.voltage})
         if entry.rpm is not None: plot_data['live']['rpm'].append({'x': ts, 'y': entry.rpm})
         if entry.vibration is not None: plot_data['live']['vibration'].append({'x': ts, 'y': entry.vibration})
         if entry.temp is not None: plot_data['live']['temp'].append({'x': ts, 'y': entry.temp})
-        if entry.torque is not None: plot_data['live']['torque'].append({'x': ts, 'y': entry.torque}) # Add torque to live for fallback
+        if entry.torque is not None: plot_data['live']['torque'].append({'x': ts, 'y': entry.torque})
 
-    for entry in twin_data_queryset: # Iterate twin data
+    for entry in twin_data_queryset:
         ts = entry.timestamp.isoformat()
         if entry.current is not None: plot_data['twin']['current'].append({'x': ts, 'y': entry.current})
         if entry.voltage is not None: plot_data['twin']['voltage'].append({'x': ts, 'y': entry.voltage})
@@ -347,12 +349,14 @@ def get_plot_data(start_time=None, end_time=None):
         if entry.temp is not None: plot_data['twin']['temp'].append({'x': ts, 'y': entry.temp})
         if entry.torque is not None: plot_data['twin']['torque'].append({'x': ts, 'y': entry.torque})
  
-    # Process RawData
+    # Process RawData with prediction status
     for entry in raw_data_queryset:
         ts = entry.timestamp.isoformat()
-        if entry.metric_type == 'temperature' and entry.value is not None: plot_data['raw']['temperature'].append({'x': ts, 'y': entry.value})
-        if entry.metric_type == 'current' and entry.value is not None: plot_data['raw']['current'].append({'x': ts, 'y': entry.value})
-        if entry.metric_type == 'torque' and entry.value is not None: plot_data['raw']['torque'].append({'x': ts, 'y': entry.value})
+        prediction_status = predictions_by_metric_and_time.get(entry.metric_type, {}).get(ts, None)
+        point = {'x': ts, 'y': entry.value, 'prediction': prediction_status} # Add prediction status
+        if entry.metric_type == 'temperature' and entry.value is not None: plot_data['raw']['temperature'].append(point)
+        if entry.metric_type == 'current' and entry.value is not None: plot_data['raw']['current'].append(point)
+        if entry.metric_type == 'torque' and entry.value is not None: plot_data['raw']['torque'].append(point)
 
     # Process FeatureData
     for entry in feature_data_queryset:
@@ -363,26 +367,22 @@ def get_plot_data(start_time=None, end_time=None):
             if entry.max_val is not None: plot_data['feature']['temperature_max'].append({'x': ts, 'y': entry.max_val})
             if entry.median is not None: plot_data['feature']['temperature_median'].append({'x': ts, 'y': entry.median})
             if entry.std_dev is not None: plot_data['feature']['temperature_std'].append({'x': ts, 'y': entry.std_dev})
-            if entry.data_range is not None: plot_data['feature']['temperature_range'].append({'x': ts, 'y': entry.data_range})
         if entry.metric_type == 'current':
             if entry.mean is not None: plot_data['feature']['current_mean'].append({'x': ts, 'y': entry.mean})
             if entry.min_val is not None: plot_data['feature']['current_min'].append({'x': ts, 'y': entry.min_val})
             if entry.max_val is not None: plot_data['feature']['current_max'].append({'x': ts, 'y': entry.max_val})
             if entry.median is not None: plot_data['feature']['current_median'].append({'x': ts, 'y': entry.median})
             if entry.std_dev is not None: plot_data['feature']['current_std'].append({'x': ts, 'y': entry.std_dev})
-            if entry.data_range is not None: plot_data['feature']['current_range'].append({'x': ts, 'y': entry.data_range})
         if entry.metric_type == 'torque':
             if entry.mean is not None: plot_data['feature']['torque_mean'].append({'x': ts, 'y': entry.mean})
             if entry.min_val is not None: plot_data['feature']['torque_min'].append({'x': ts, 'y': entry.min_val})
             if entry.max_val is not None: plot_data['feature']['torque_max'].append({'x': ts, 'y': entry.max_val})
             if entry.median is not None: plot_data['feature']['torque_median'].append({'x': ts, 'y': entry.median})
             if entry.std_dev is not None: plot_data['feature']['torque_std'].append({'x': ts, 'y': entry.std_dev})
-            if entry.data_range is not None: plot_data['feature']['torque_range'].append({'x': ts, 'y': entry.data_range})
 
     # Process PredictionData
     for entry in prediction_data_queryset:
         ts = entry.timestamp.isoformat()
-        # Only check for status_value now
         if entry.metric_type == 'temperature':
             if entry.status_value is not None: plot_data['prediction']['temperature_status_value'].append({'x': ts, 'y': entry.status_value})
         if entry.metric_type == 'current':
@@ -394,17 +394,23 @@ def get_plot_data(start_time=None, end_time=None):
 
 def get_latest_plot_data_point():
     """
-    Retrieves the very latest LiveData, TwinData, and RawData points and formats them.
-    Useful for continuous live updates.
+    Retrieves the very latest LiveData, TwinData, RawData, FeatureData, and PredictionData points
+    and formats them. Useful for continuous live updates.
     """
     latest_live = LiveData.objects.order_by('-timestamp').first()
     latest_twin = TwinData.objects.order_by('-timestamp').first()
+    
+    # Get latest raw data points for each metric type
     latest_raw_temp = RawData.objects.filter(metric_type='temperature').order_by('-timestamp').first()
     latest_raw_current = RawData.objects.filter(metric_type='current').order_by('-timestamp').first()
     latest_raw_torque = RawData.objects.filter(metric_type='torque').order_by('-timestamp').first()
+    
+    # Get latest feature data points for each metric type
     latest_feature_temp = FeatureData.objects.filter(metric_type='temperature').order_by('-timestamp').first()
     latest_feature_current = FeatureData.objects.filter(metric_type='current').order_by('-timestamp').first()
     latest_feature_torque = FeatureData.objects.filter(metric_type='torque').order_by('-timestamp').first()
+    
+    # Get latest prediction data points for each metric type
     latest_prediction_temp = PredictionData.objects.filter(metric_type='temperature').order_by('-timestamp').first()
     latest_prediction_current = PredictionData.objects.filter(metric_type='current').order_by('-timestamp').first()
     latest_prediction_torque = PredictionData.objects.filter(metric_type='torque').order_by('-timestamp').first()
@@ -424,9 +430,9 @@ def get_latest_plot_data_point():
         if latest_live.rpm is not None: data_point['live']['rpm'] = {'x': ts, 'y': latest_live.rpm}
         if latest_live.vibration is not None: data_point['live']['vibration'] = {'x': ts, 'y': latest_live.vibration}
         if latest_live.temp is not None: data_point['live']['temp'] = {'x': ts, 'y': latest_live.temp}
-        if latest_live.torque is not None: data_point['live']['torque'] = {'x': ts, 'y': latest_live.torque} # Add torque to live for fallback
+        if latest_live.torque is not None: data_point['live']['torque'] = {'x': ts, 'y': latest_live.torque}
 
-    if latest_twin: # Twin data
+    if latest_twin:
         ts = latest_twin.timestamp.isoformat()
         if latest_twin.current is not None: data_point['twin']['current'] = {'x': ts, 'y': latest_twin.current}
         if latest_twin.voltage is not None: data_point['twin']['voltage'] = {'x': ts, 'y': latest_twin.voltage}
@@ -435,16 +441,19 @@ def get_latest_plot_data_point():
         if latest_twin.temp is not None: data_point['twin']['temp'] = {'x': ts, 'y': latest_twin.temp}
         if latest_twin.torque is not None: data_point['twin']['torque'] = {'x': ts, 'y': latest_twin.torque}
 
-    # Ensure raw data points have 'x' and 'y' keys
+    # Process RawData with prediction status
     if latest_raw_temp:
         ts = latest_raw_temp.timestamp.isoformat()
-        if latest_raw_temp.value is not None: data_point['raw']['temperature'] = {'x': ts, 'y': latest_raw_temp.value}
+        prediction_status = latest_prediction_temp.status_value if latest_prediction_temp and latest_prediction_temp.timestamp == latest_raw_temp.timestamp else None
+        if latest_raw_temp.value is not None: data_point['raw']['temperature'] = {'x': ts, 'y': latest_raw_temp.value, 'prediction': prediction_status}
     if latest_raw_current:
         ts = latest_raw_current.timestamp.isoformat()
-        if latest_raw_current.value is not None: data_point['raw']['current'] = {'x': ts, 'y': latest_raw_current.value}
+        prediction_status = latest_prediction_current.status_value if latest_prediction_current and latest_prediction_current.timestamp == latest_raw_current.timestamp else None
+        if latest_raw_current.value is not None: data_point['raw']['current'] = {'x': ts, 'y': latest_raw_current.value, 'prediction': prediction_status}
     if latest_raw_torque:
         ts = latest_raw_torque.timestamp.isoformat()
-        if latest_raw_torque.value is not None: data_point['raw']['torque'] = {'x': ts, 'y': latest_raw_torque.value}
+        prediction_status = latest_prediction_torque.status_value if latest_prediction_torque and latest_prediction_torque.timestamp == latest_raw_torque.timestamp else None
+        if latest_raw_torque.value is not None: data_point['raw']['torque'] = {'x': ts, 'y': latest_raw_torque.value, 'prediction': prediction_status}
 
     if latest_feature_temp:
         ts = latest_feature_temp.timestamp.isoformat()
@@ -453,7 +462,6 @@ def get_latest_plot_data_point():
         if latest_feature_temp.max_val is not None: data_point['feature']['temperature_max'] = {'x': ts, 'y': latest_feature_temp.max_val}
         if latest_feature_temp.median is not None: data_point['feature']['temperature_median'] = {'x': ts, 'y': latest_feature_temp.median}
         if latest_feature_temp.std_dev is not None: data_point['feature']['temperature_std'] = {'x': ts, 'y': latest_feature_temp.std_dev}
-        if latest_feature_temp.data_range is not None: data_point['feature']['temperature_range'] = {'x': ts, 'y': latest_feature_temp.data_range}
     if latest_feature_current:
         ts = latest_feature_current.timestamp.isoformat()
         if latest_feature_current.mean is not None: data_point['feature']['current_mean'] = {'x': ts, 'y': latest_feature_current.mean}
@@ -461,7 +469,6 @@ def get_latest_plot_data_point():
         if latest_feature_current.max_val is not None: data_point['feature']['current_max'] = {'x': ts, 'y': latest_feature_current.max_val}
         if latest_feature_current.median is not None: data_point['feature']['current_median'] = {'x': ts, 'y': latest_feature_current.median}
         if latest_feature_current.std_dev is not None: data_point['feature']['current_std'] = {'x': ts, 'y': latest_feature_current.std_dev}
-        if latest_feature_current.data_range is not None: data_point['feature']['current_range'] = {'x': ts, 'y': latest_feature_current.data_range}
     if latest_feature_torque:
         ts = latest_feature_torque.timestamp.isoformat()
         if latest_feature_torque.mean is not None: data_point['feature']['torque_mean'] = {'x': ts, 'y': latest_feature_torque.mean}
@@ -469,7 +476,6 @@ def get_latest_plot_data_point():
         if latest_feature_torque.max_val is not None: data_point['feature']['torque_max'] = {'x': ts, 'y': latest_feature_torque.max_val}
         if latest_feature_torque.median is not None: data_point['feature']['torque_median'] = {'x': ts, 'y': latest_feature_torque.median}
         if latest_feature_torque.std_dev is not None: data_point['feature']['torque_std'] = {'x': ts, 'y': latest_feature_torque.std_dev}
-        if latest_feature_torque.data_range is not None: data_point['feature']['torque_range'] = {'x': ts, 'y': latest_feature_torque.data_range}
 
     if latest_prediction_temp:
         ts = latest_prediction_temp.timestamp.isoformat()

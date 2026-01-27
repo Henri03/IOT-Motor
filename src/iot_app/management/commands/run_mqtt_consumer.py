@@ -198,7 +198,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
         await self._save_live_data(payload)
-        # self.stdout.write(self.style.SUCCESS(f"Live-Daten gespeichert.")) # Commented out to reduce console spam
+        self.stdout.write(self.style.SUCCESS(f"Live-Daten gespeichert.")) # Commented out to reduce console spam
 
     async def _handle_twin_data(self, payload):
         """
@@ -206,7 +206,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
         await self._save_twin_data(payload)                     # await, da _save_twin_data mit @sync_to_async dekoriert ist
-        # self.stdout.write(self.style.SUCCESS(f"Twin-Daten gespeichert.")) # Commented out to reduce console spam
+        self.stdout.write(self.style.SUCCESS(f"Twin-Daten gespeichert.")) # Commented out to reduce console spam
 
     async def _handle_malfunction_data(self, payload, topic_type):
         """
@@ -224,7 +224,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         Speichert die Daten und gibt eine Debug-Ausgabe.
         """
         await self._save_raw_data(payload, metric_type)         # await, da _save_raw_data mit @sync_to_async dekoriert ist
-        # self.stdout.write(self.style.SUCCESS(f"Rohdaten für {metric_type} empfangen und gespeichert: {payload}.")) # Commented out to reduce console spam
+        self.stdout.write(self.style.SUCCESS(f"Rohdaten für {metric_type} empfangen und gespeichert: {payload}.")) # Commented out to reduce console spam
         
     async def _handle_feature_data(self, payload, metric_type):
         """
@@ -232,7 +232,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         Speichert die Daten und gibt eine Debug-Ausgabe.
         """
         await self._save_feature_data(payload, metric_type)     # await, da _save_feature_data mit @sync_to_async dekoriert ist
-        # self.stdout.write(self.style.SUCCESS(f"Feature-Daten für {metric_type} empfangen und gespeichert: {payload}.")) # Commented out to reduce console spam
+        self.stdout.write(self.style.SUCCESS(f"Feature-Daten für {metric_type} empfangen und gespeichert: {payload}.")) # Commented out to reduce console spam
         
     async def _handle_prediction_data(self, payload, metric_type):
         """
@@ -240,7 +240,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         Speichert die Daten und gibt eine Debug-Ausgabe.
         """
         await self._save_prediction_data(payload, metric_type) # await, da _save_prediction_data mit @sync_to_async dekoriert ist
-        # self.stdout.write(self.style.SUCCESS(f"Vorhersagedaten für {metric_type} empfangen und gespeichert: {payload}.")) # Commented out to reduce console spam
+        self.stdout.write(self.style.SUCCESS(f"Vorhersagedaten für {metric_type} empfangen und gespeichert: {payload}.")) # Commented out to reduce console spam
 
     # --- Hilfsfunktionen für Datenbankoperationen und Channels-Kommunikation ---
 
