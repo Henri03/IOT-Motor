@@ -141,6 +141,8 @@ class Command(BaseCommand):
         """
         command_instance = userdata['command_instance']
 
+        command_instance.stdout.write(f"Empfangen auf Topic: {msg.topic}, Payload: {msg.payload.decode()}")
+
         try:
             payload = json.loads(msg.payload.decode())
             logger.debug(f"Nachricht auf Topic {msg.topic} empfangen: {payload}")
