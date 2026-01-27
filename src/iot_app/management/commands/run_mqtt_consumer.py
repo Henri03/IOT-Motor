@@ -11,11 +11,14 @@ import traceback
 from datetime import datetime
 import asyncio
 import pytz
+import logging
 
-class Command(BaseCommand):             # erlaubt es, das Skript mit 'python manage.py mqtt_consumer' in der Datei "docker-compose.yml" auszuführen.
+logger = logging.getLogger(__name__)
+
+class Command(BaseCommand):
     help = 'Startet einen MQTT-Consumer, um Sensordaten zu empfangen und in der Datenbank zu speichern.'
 
-    last_anomaly_state = {}             # Speichert den letzten Anomalie-Status pro Metrik
+    last_anomaly_state = {}
 
     def add_arguments(self, parser):
         """
@@ -49,9 +52,9 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         Die Hauptmethode, die beim Ausführen des Management-Befehls aufgerufen wird.
         Initialisiert den MQTT-Client und startet die Verbindung.
         """
-        self.broker_address = options['broker']    # options['broker'] enthält den Wert aus settings.DOCKER_MQTT_BROKER_HOST (oder Kommandozeile)
+        self.broker_address = options['broker']
         self.port = options['port']
-        self.topic_live = options['topic_live']    # self.topic_live erhält den Wert aus settings.MQTT_TOPIC_LIVE (oder Kommandozeile)
+        self.topic_live = options['topic_live']
         self.topic_twin = options['topic_twin']
         self.topic_malfunction_info = options['topic_malfunction_info']
         self.topic_malfunction_warning = options['topic_malfunction_warning']
@@ -72,7 +75,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         self.topic_prediction_torque = options['topic_prediction_torque']
 
         # Initialisiert den Anomalie-Status für jede Metrik
-        metrics_to_compare = ['current', 'temp', 'torque']  #, 'voltage', 'rpm', 'vibration'
+        metrics_to_compare = ['current', 'temp', 'torque']
         for metric_name in metrics_to_compare:
             self.last_anomaly_state[metric_name] = False
 
@@ -91,27 +94,27 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         self.stdout.write(self.style.SUCCESS(f"Abweichungsschwellenwert für Warnungen: {self.deviation_threshold}%"))
         self.stdout.write(self.style.SUCCESS(f"Datenaktualitäts-Schwellenwert: {self.data_freshness_threshold} Sekunden"))
 
-        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2) # Updated to use VERSION2
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         client.on_connect = async_to_sync(self._on_connect_async)
         client.on_message = async_to_sync(self._on_message_async)
         client.user_data_set({
-            'command_instance': self # speichert das aktuelle Command-Objekt (self) unter dem Schlüssel 'command_instance' in das userdata-Dictionary des MQTT-Clients
+            'command_instance': self
         })
 
         try:
             client.connect(self.broker_address, self.port, 60)
-            client.loop_forever() # Startet die MQTT-Client-Schleife, blockiert den Thread
+            client.loop_forever()
         except Exception as e:
             self.stderr.write(self.style.ERROR(f"MQTT-Verbindungsfehler: {e}"))
             self.stderr.write(self.style.ERROR("Stellen Sie sicher, dass der MQTT-Broker (Mosquitto) läuft und erreichbar ist."))
 
-    async def _on_connect_async(self, client, userdata, flags, rc, properties): # Added 'properties' argument
+    async def _on_connect_async(self, client, userdata, flags, rc, properties):
         """
         Callback-Funktion, die aufgerufen wird, wenn der Client eine Verbindung zum Broker herstellt.
         Abonniert die konfigurierten MQTT-Topics.
         """
-        command_instance = userdata['command_instance']     ########################################################
-        if rc == 0: #return code == 0 -> keine fehler
+        command_instance = userdata['command_instance']
+        if rc == 0:
             command_instance.stdout.write(command_instance.style.SUCCESS("Verbunden mit MQTT Broker!"))
             client.subscribe(command_instance.topic_live)
             client.subscribe(command_instance.topic_twin)
@@ -137,12 +140,11 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         Leitet die Nachricht an den entsprechenden Handler weiter.
         """
         command_instance = userdata['command_instance']
-        
+
         try:
             payload = json.loads(msg.payload.decode())
-            #command_instance.stdout.write(f"DEBUG: Nachricht auf Topic {msg.topic} empfangen: {payload}")
+            logger.debug(f"Nachricht auf Topic {msg.topic} empfangen: {payload}")
 
-            # Überprüfen, ob ein Motor in der Datenbank existiert
             motor = await sync_to_async(MotorInfo.objects.first)()
             if not motor:
                 command_instance.stderr.write(command_instance.style.ERROR("Kein Motor in der Datenbank gefunden. Bitte im Admin-Bereich erstellen."))
@@ -180,11 +182,11 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             else:
                 command_instance.stdout.write(f"INFO: Unbekanntes Topic empfangen: {msg.topic}")
 
-            # Nach jeder Nachricht die Dashboard-Anzeige aktualisieren und Anomalien prüfen
-            await command_instance._process_and_notify_dashboard(
-                command_instance.deviation_threshold,
-                command_instance.last_anomaly_state,
-            )
+            # WICHTIG: _process_and_notify_dashboard() und _notify_dashboard_for_plot_data_point()
+            # werden jetzt in den einzelnen _handle_... Methoden aufgerufen,
+            # um sicherzustellen, dass sowohl Plots als auch Panel-Daten
+            # bei jedem relevanten Datenpunkt aktualisiert werden.
+            # Der Aufruf hier ist redundant und wird entfernt.
 
         except json.JSONDecodeError:
             command_instance.stderr.write(command_instance.style.ERROR(f"Fehler beim Dekodieren von JSON aus der Nachricht: {msg.payload} auf Topic {msg.topic}"))
@@ -198,69 +200,85 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
         await self._save_live_data(payload)
-        self.stdout.write(self.style.SUCCESS(f"Live-Daten gespeichert.")) # Commented out to reduce console spam
+        logger.debug(f"Live-Daten gespeichert.")
+        await self._notify_dashboard_for_plot_data_point() # Benachrichtigt für Plots
+        # LiveData ist die Hauptquelle für Panel-Werte, daher Panel-Update triggern
+        await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
 
     async def _handle_twin_data(self, payload):
         """
         Verarbeitet Nachrichten vom Twin-Daten-Topic.
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
-        await self._save_twin_data(payload)                     # await, da _save_twin_data mit @sync_to_async dekoriert ist
-        self.stdout.write(self.style.SUCCESS(f"Twin-Daten gespeichert.")) # Commented out to reduce console spam
+        await self._save_twin_data(payload)
+        logger.debug(f"Twin-Daten gespeichert.")
+        await self._notify_dashboard_for_plot_data_point() # Benachrichtigt für Plots
+        # TwinData ist wichtig für Panel-Vergleiche, daher Panel-Update triggern
+        await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
 
     async def _handle_malfunction_data(self, payload, topic_type):
         """
         Verarbeitet Nachrichten von den Malfunction-Topics (Info, Warning, Error).
-        Speichert die Daten im MalfunctionLog.
+        Speichert die Daten im MalfunctionLog und benachrichtigt das Dashboard über eine Änderung im Anomaly-Status.
         """
         if 'message_type' not in payload:
             payload['message_type'] = topic_type
-        await self._save_malfunction_log(payload)               # await, da _save_malfunction_log mit @sync_to_async dekoriert ist
-        self.stdout.write(self.style.WARNING(f"Störungsprotokoll ({topic_type}) gespeichert: {payload.get('description')}"))
+        await self._save_malfunction_log(payload)
+        logger.warning(f"Störungsprotokoll ({topic_type}) gespeichert: {payload.get('description')}")
+        # Malfunction logs beeinflussen den Anomaly-Status und die Log-Anzeige, daher Panel-Update triggern
+        await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
 
     async def _handle_raw_data(self, payload, metric_type):
         """
         Verarbeitet Nachrichten von den Rohdaten-Topics.
-        Speichert die Daten und gibt eine Debug-Ausgabe.
+        Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
-        await self._save_raw_data(payload, metric_type)         # await, da _save_raw_data mit @sync_to_async dekoriert ist
-        self.stdout.write(self.style.SUCCESS(f"Rohdaten für {metric_type} empfangen und gespeichert: {payload}.")) # Commented out to reduce console spam
-        
+        await self._save_raw_data(payload, metric_type)
+        logger.debug(f"Rohdaten für {metric_type} empfangen und gespeichert: {payload}.")
+        await self._notify_dashboard_for_plot_data_point() # Benachrichtigt für Plots
+        # Rohdaten beeinflussen die Panel-Anzeige des realen Motors, daher Panel-Update triggern
+        await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
+
     async def _handle_feature_data(self, payload, metric_type):
         """
         Verarbeitet Nachrichten von den Feature-Topics.
-        Speichert die Daten und gibt eine Debug-Ausgabe.
+        Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
-        await self._save_feature_data(payload, metric_type)     # await, da _save_feature_data mit @sync_to_async dekoriert ist
-        self.stdout.write(self.style.SUCCESS(f"Feature-Daten für {metric_type} empfangen und gespeichert: {payload}.")) # Commented out to reduce console spam
-        
+        await self._save_feature_data(payload, metric_type)
+        logger.debug(f"Feature-Daten für {metric_type} empfangen und gespeichert: {payload}.")
+        await self._notify_dashboard_for_plot_data_point() # Benachrichtigt für Plots
+        # Feature-Daten können die Anomalie-Erkennung beeinflussen (wenn diese Features nutzt), daher Panel-Update triggern
+        await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
+
     async def _handle_prediction_data(self, payload, metric_type):
         """
         Verarbeitet Nachrichten von den Vorhersage-Topics.
-        Speichert die Daten und gibt eine Debug-Ausgabe.
+        Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
-        await self._save_prediction_data(payload, metric_type) # await, da _save_prediction_data mit @sync_to_async dekoriert ist
-        self.stdout.write(self.style.SUCCESS(f"Vorhersagedaten für {metric_type} empfangen und gespeichert: {payload}.")) # Commented out to reduce console spam
+        await self._save_prediction_data(payload, metric_type)
+        logger.debug(f"Vorhersagedaten für {metric_type} empfangen und gespeichert: {payload}.")
+        await self._notify_dashboard_for_plot_data_point() # Benachrichtigt für Plots
+        # Vorhersagedaten beeinflussen die Anomalie-Erkennung und die Plot-Darstellung, daher Panel-Update triggern
+        await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
 
-    # --- Hilfsfunktionen für Datenbankoperationen und Channels-Kommunikation ---
-
-    async def _notify_dashboard_group(self, message_type, data=None):
+    async def _notify_dashboard_for_plot_data_point(self):
         """
         Asynchrone Hilfsfunktion zum Senden einer Nachricht an die Dashboard-Gruppe
-        über den Channels Layer.
+        über den Channels Layer, um einen neuen Plot-Datenpunkt zu signalisieren.
         """
         channel_layer = get_channel_layer()
         if channel_layer:
             await channel_layer.group_send(
                 "iot_dashboard_group",
                 {
-                    "type": "dashboard_message", # Muss mit einer Methode im Consumer übereinstimmen
-                    "message_type": message_type, # Eigener Typ für die interne Logik des Consumers
-                    "data": data,
+                    "type": "dashboard_message",
+                    "message_type": "plot_data_point",
+                    "data": {}
                 }
             )
+            logger.debug("Sent plot_data_point notification to channel layer.")
         else:
-            print("WARNING: Channel layer not available. Cannot notify dashboard.")
+            logger.warning("Channel layer not available for plot_data_point notification.")
 
     async def _process_and_notify_dashboard(self, deviation_threshold, last_anomaly_state):
         """
@@ -270,7 +288,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         """
         channel_layer = get_channel_layer()
         if not channel_layer:
-            print("DEBUG: [MQTT_Consumer] Channel layer nicht verfügbar, Dashboard-Update übersprungen.")
+            logger.warning("Channel layer nicht verfügbar, Dashboard-Update übersprungen.")
             return
 
         # Kleine Verzögerung, um sicherzustellen, dass Daten in der DB sind und um den Event-Loop nicht zu überlasten
@@ -278,12 +296,10 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
 
         motor = await sync_to_async(MotorInfo.objects.first)()
         if not motor:
-            print("DEBUG: [MQTT_Consumer] Kein Motor gefunden, kann kein detailliertes Dashboard-Update senden.")
+            logger.warning("Kein Motor gefunden, kann kein detailliertes Dashboard-Update senden.")
             retracted_count = "N/A"
             extended_count = "N/A"
         else:
-            # Assuming MotorInfo is linked to MalfunctionLog if you want to filter by motor
-            # For now, fetching total counts if MotorInfo is not directly linked to MalfunctionLog
             retracted_count = await sync_to_async(MalfunctionLog.objects.filter(
                 description__icontains='motor fährt ein', message_type='INFO'
             ).count)()
@@ -312,18 +328,13 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
 
         def is_data_fresh(data_object, threshold_seconds):
             if data_object and data_object.timestamp:
-                # Stellen Sie sicher, dass der Zeitstempel timezone-aware ist, bevor Sie ihn vergleichen
-                # timezone.now() ist immer timezone-aware
                 return (timezone.now() - data_object.timestamp).total_seconds() < threshold_seconds
             return False
 
-        # Nur die neuesten 5 Logs für die Anzeige abrufen
         latest_malfunction_logs_for_display = await sync_to_async(list)(
             MalfunctionLog.objects.order_by('-timestamp')[:5].values()
         )
 
-        ## Daten ans Dashboard senden
-        # Hier wird die Aktualität geprüft und ggf. '-' gesetzt
         real_motor_data = {
             "Strom": {"value": latest_raw_data['current'].value if is_data_fresh(latest_raw_data['current'], self.data_freshness_threshold) else '-', "unit": "A"},
             "Spannung": {"value": latest_live_data.voltage if is_data_fresh(latest_live_data, self.data_freshness_threshold) else '-', "unit": "V"},
@@ -333,10 +344,9 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             "Drehmoment": {"value": latest_raw_data['torque'].value if is_data_fresh(latest_raw_data['torque'], self.data_freshness_threshold) else '-', "unit": "Nm"},
             "Laufzeit": {"value": latest_live_data.run_time if is_data_fresh(latest_live_data, self.data_freshness_threshold) else '-', "unit": "h"},
             "Anzahl eingefahren": {"value": retracted_count, "unit": ""},
-            "Anzahl ausgefahren": {"value": extended_count, "unit": ""}, 
+            "Anzahl ausgefahren": {"value": extended_count, "unit": ""},
         }
-        
-        # Für Twin-Daten könnten Sie eine ähnliche Logik anwenden, wenn der Twin-Publisher auch stoppen kann
+
         digital_twin_data = {
             "Strom": {"value": latest_twin_data.current if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "A"},
             "Spannung": {"value": latest_twin_data.voltage if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "V"},
@@ -345,10 +355,10 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             "Temperatur": {"value": latest_twin_data.temp if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "°C"},
             "Drehmoment": {"value": latest_twin_data.torque if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "Nm"},
             "Laufzeit": {"value": latest_twin_data.run_time if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "h"},
-            "Anzahl eingefahren": {"value": retracted_count, "unit": ""}, 
-            "Anzahl ausgefahren": {"value": extended_count, "unit": ""}, 
+            "Anzahl eingefahren": {"value": retracted_count, "unit": ""},
+            "Anzahl ausgefahren": {"value": extended_count, "unit": ""},
         }
-       # Daten für Raw, Feature, Prediction für das Dashboard aufbereiten
+
         dashboard_raw_data = {
             metric: {'value': getattr(data, 'value', None) if is_data_fresh(data, self.data_freshness_threshold) else None, 'timestamp': getattr(data, 'timestamp', None)}
             for metric, data in latest_raw_data.items()
@@ -373,9 +383,9 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         current_anomaly_detected = False
         current_anomaly_message = "Motor läuft normal."
 
-        metrics_to_compare = ['current', 'temp', 'torque'] # 'voltage', 'rpm', 'vibration',
+        metrics_to_compare = ['current', 'temp', 'torque']
 
-        logs_to_create = [] # Sammelt Logs, die in dieser Iteration erstellt werden sollen
+        logs_to_create = []
 
         if not latest_raw_data['current'] or not latest_raw_data['temperature'] or not latest_raw_data['torque'] or not latest_twin_data or \
             not is_data_fresh(latest_raw_data['current'], self.data_freshness_threshold) or \
@@ -383,15 +393,13 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             not is_data_fresh(latest_raw_data['torque'], self.data_freshness_threshold) or \
             not is_data_fresh(latest_twin_data, self.data_freshness_threshold):
             current_anomaly_message = "Keine ausreichenden oder aktuellen Daten für Anomalie-Erkennung verfügbar."
-            current_anomaly_detected = True       
-            
+            current_anomaly_detected = True
+
         else:
             for metric_name in metrics_to_compare:
-                # raw_value aus latest_raw_data abrufen
                 raw_data_obj = latest_raw_data.get(metric_name)
                 raw_value = raw_data_obj.value if raw_data_obj else None
 
-                # twin_value aus latest_twin_data abrufen
                 twin_value = getattr(latest_twin_data, metric_name, None)
 
                 is_currently_deviating = False
@@ -401,19 +409,19 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
                         if deviation > deviation_threshold:
                             is_currently_deviating = True
                             current_anomaly_detected = True
-                            if "KRITISCHE STÖRUNG" not in current_anomaly_message: # Überschreibe nicht kritische Meldungen
+                            if "KRITISCHE STÖRUNG" not in current_anomaly_message:
                                 current_anomaly_message = f"WARNUNG: {metric_name.capitalize()}-Abweichung erkannt."
-                    elif raw_value != 0 and twin_value == 0: # Sonderfall: Twin ist 0, Raw ist nicht
+                    elif raw_value != 0 and twin_value == 0:
                         is_currently_deviating = True
                         current_anomaly_detected = True
                         if "KRITISCHE STÖRUNG" not in current_anomaly_message:
                             current_anomaly_message = f"WARNUNG: {metric_name.capitalize()}-Abweichung: Twin ist 0, Raw ist {raw_value:.2f}."
-                # Logik zur Erstellung von MalfunctionLogs bei Statusänderungen
+
                 if is_currently_deviating and not last_anomaly_state.get(metric_name, False):
                     logs_to_create.append({
                         'message_type': 'WARNING',
                         'description': f"{metric_name.capitalize()}-Abweichung > {deviation_threshold:.1f}% erkannt (Raw: {raw_value:.2f}, Twin: {twin_value:.2f})",
-                        'motor_state': 'unbekannt', 
+                        'motor_state': 'unbekannt',
                         'emergency_stop_active': False
                     })
                     last_anomaly_state[metric_name] = True
@@ -426,34 +434,29 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
                     })
                     last_anomaly_state[metric_name] = False
 
-            # Speichere gesammelte Logs in der Datenbank
             for log_data in logs_to_create:
                 await sync_to_async(MalfunctionLog.objects.create)(**log_data)
 
-            # Prüfe auf aktuelle UNACKNOWLEDGED ERROR-Logs, die die Anomalie-Meldung überschreiben könnten
             unacknowledged_error_logs = await sync_to_async(list)(MalfunctionLog.objects.filter(
-                timestamp__gte=timezone.now() - timezone.timedelta(minutes=5), # Nur Logs der letzten 5 Minuten prüfen
+                timestamp__gte=timezone.now() - timezone.timedelta(minutes=5),
                 message_type='ERROR',
-                acknowledged=False 
+                acknowledged=False
             ).order_by('-timestamp').values())
 
             if unacknowledged_error_logs:
                 current_anomaly_detected = True
-                current_anomaly_message = f"KRITISCHE STÖRUNG: {unacknowledged_error_logs[0]['description']}" # Zeige den neuesten UNACKNOWLEDGED Fehler an
+                current_anomaly_message = f"KRITISCHE STÖRUNG: {unacknowledged_error_logs[0]['description']}"
             else:
-                # Wenn keine ERROR-Logs, prüfe auf UNACKNOWLEDGED WARNING-Logs
                 unacknowledged_warning_logs = await sync_to_async(list)(MalfunctionLog.objects.filter(
-                    timestamp__gte=timezone.now() - timezone.timedelta(minutes=5), # Nur Logs der letzten 5 Minuten prüfen
+                    timestamp__gte=timezone.now() - timezone.timedelta(minutes=5),
                     message_type='WARNING',
-                    acknowledged=False 
+                    acknowledged=False
                 ).order_by('-timestamp').values())
 
                 if unacknowledged_warning_logs:
                     current_anomaly_detected = True
-                    # Zeige die neueste UNACKNOWLEDGED Warnung an
                     current_anomaly_message = f"WARNUNG: {unacknowledged_warning_logs[0]['description']}"
-                    
-        # Runden der Werte für die Anzeige im Dashboard
+
         rounded_real_motor_data = _round_numeric_values_for_display(real_motor_data, decimal_places=2)
         rounded_digital_twin_data = _round_numeric_values_for_display(digital_twin_data, decimal_places=2)
         rounded_dashboard_raw_data = _round_numeric_values_for_display(dashboard_raw_data, decimal_places=2)
@@ -468,26 +471,26 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
                 'message': current_anomaly_message
             },
             'malfunction_logs': latest_malfunction_logs_for_display,
-            'raw_data': rounded_dashboard_raw_data, 
-            'feature_data': rounded_dashboard_feature_data, 
+            'raw_data': rounded_dashboard_raw_data,
+            'feature_data': rounded_dashboard_feature_data,
             'prediction_data': rounded_dashboard_prediction_data,
         }
 
-        # Konvertiere alle datetime-Objekte in ISO-Strings für die JSON-Serialisierung
         serializable_message_data = _to_serializable_dict(message_to_send)
 
         try:
             await channel_layer.group_send(
                 "iot_dashboard_group",
                 {
-                    'type': 'dashboard_message', # Methode im Consumer, die diese Nachricht verarbeitet
-                    'message_type': 'dashboard_update', # Interner Typ für den Consumer
-                    'data': serializable_message_data # Die tatsächlichen Daten
+                    'type': 'dashboard_message',
+                    'message_type': 'dashboard_update',
+                    'data': serializable_message_data
                 }
             )
+            logger.debug("Sent dashboard_update to channel layer.")
         except Exception as e:
-            print(f"DEBUG: [MQTT_Consumer] Fehler beim Senden des Dashboard-Updates an Channel Layer: {e}")
-            traceback.print_exc() # Für detailliertere Fehlerinformationen
+            logger.error(f"Fehler beim Senden des Dashboard-Updates an Channel Layer: {e}")
+            traceback.print_exc()
 
     @sync_to_async
     def _save_live_data(self, payload):
@@ -539,7 +542,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             motor_state=payload.get('motor_state', 'unbekannt'),
             emergency_stop_active=payload.get('emergency_stop_active', False),
         )
-    
+
     @sync_to_async
     def _save_raw_data(self, payload, metric_type):
         """
@@ -581,7 +584,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         PredictionData.objects.create(
             timestamp=timestamp,
             metric_type=metric_type,
-            status_value=payload.get('value'), # Speichert den -1/1 Wert im neuen Feld
+            status_value=payload.get('value'),
         )
 
 # Globale Hilfsfunktion für die Serialisierung
@@ -614,7 +617,7 @@ def make_aware_from_iso(iso_string):
     else:
         # If it's naive, make it timezone-aware with UTC
         return timezone.make_aware(dt_object, pytz.utc)
-        
+
 def _round_numeric_values_for_display(data_dict, decimal_places=2):
     """
     Recursively rounds numeric 'value' fields within a dictionary for display purposes.
@@ -624,10 +627,9 @@ def _round_numeric_values_for_display(data_dict, decimal_places=2):
     rounded_data = {}
     for key, item in data_dict.items():
         if isinstance(item, dict):
-            # Handle the specific structure of raw, feature, and prediction data
-            if 'value' in item and isinstance(item['value'], (int, float)): # Raw data
+            if 'value' in item and isinstance(item['value'], (int, float)):
                 rounded_data[key] = {**item, 'value': round(item['value'], decimal_places)}
-            elif 'mean' in item and 'min' in item: # Feature data
+            elif 'mean' in item and 'min' in item:
                 rounded_item = {}
                 for sub_key, sub_value in item.items():
                     if isinstance(sub_value, (int, float)):
@@ -635,14 +637,10 @@ def _round_numeric_values_for_display(data_dict, decimal_places=2):
                     else:
                         rounded_item[sub_key] = sub_value
                 rounded_data[key] = rounded_item
-            elif 'status_value' in item: # Prediction data (new structure)
-                rounded_item = {}
-                for sub_key, sub_value in item.items():
-                    # status_value ist ein Integer (-1 oder 1), muss nicht gerundet werden
-                    rounded_item[sub_key] = sub_value
+            elif 'status_value' in item:
+                rounded_item = {**item}
                 rounded_data[key] = rounded_item
             else:
-                # Recursively process other nested dictionaries
                 rounded_data[key] = _round_numeric_values_for_display(item, decimal_places)
         elif isinstance(item, list):
             rounded_data[key] = [_round_numeric_values_for_display(elem, decimal_places) for elem in item]

@@ -60,6 +60,7 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         if text_data:
             text_data_json = json.loads(text_data)
             message_type = text_data_json.get('type')
+            print(f"Received message from frontend: {message_type}")
 
             if message_type == 'request_plot_data':
                 # Frontend requests plot data for a specific time range
@@ -70,30 +71,31 @@ class DashboardConsumer(AsyncWebsocketConsumer):
                 end_time = None
 
                 if start_time_str:
-                    # Ensure timezone-aware datetime objects
                     start_time = datetime.fromisoformat(start_time_str)
                     if start_time.tzinfo is None:
                         start_time = timezone.make_aware(start_time)
 
-                # Handle 'live' keyword for end_time
                 if end_time_str == 'live':
-                    end_time = 'live' # Pass 'live' keyword to send_plot_data
-                    self.live_mode_active = True # Activate live mode if end_time is 'live'
+                    end_time = 'live' # Keep as string 'live' for send_plot_data to handle
+                    self.live_mode_active = True # Activate live mode
                 elif end_time_str:
-                    # Ensure timezone-aware datetime objects
                     end_time = datetime.fromisoformat(end_time_str)
                     if end_time.tzinfo is None:
                         end_time = timezone.make_aware(end_time)
                     self.live_mode_active = False # Deactivate live mode for fixed end_time
                 else:
-                    self.live_mode_active = False # Deactivate live mode if no end_time is provided (implies fixed range)
+                    # If no end_time_str is provided, it implies a fixed range up to now, so deactivate live mode
+                    self.live_mode_active = False
 
-                await self.send_plot_data(start_time, end_time, plot_type='historical_range')
+                print(f"Frontend requested plot data: start={start_time_str}, end={end_time_str}, live_mode_active={self.live_mode_active}")
+                await self.send_plot_data(start_time=start_time, end_time=end_time, plot_type='historical_range')
+
             elif message_type == 'request_initial_data':
-                # Frontend requests initial data (e.g., "Aktuellen Lauf anzeigen" button)
-                # This should trigger the "last 10 minutes live" behavior
+                # Frontend requests initial data (e.g., "Aktuellen Lauf anzeigen" button or initial load)
+                print("Frontend requested initial data (live 10 min).")
                 self.live_mode_active = True
                 await self.send_plot_data(plot_type='initial_live_10_min') # Request initial live 10 min
+
             else:
                 print(f"Unknown message type received from frontend: {message_type}")
 
@@ -122,15 +124,17 @@ class DashboardConsumer(AsyncWebsocketConsumer):
             # Send only the latest data point for continuous plots IF live mode is active
             if self.live_mode_active:
                 await self.send_latest_plot_data_point()
+            else:
+                # print("Skipping plot_data_point: Live mode is not active.") # Uncomment for debugging
+                pass
         elif message_type == "plot_boundary_update":
             # A new plot boundary has been set, re-send historical data
             # This might be triggered by external events, so re-evaluate live mode
             if self.live_mode_active:
+                print("Received plot_boundary_update in live mode, re-requesting initial live 10 min.")
                 await self.send_plot_data(plot_type='initial_live_10_min') # Re-send current live 10 min
             else:
-                # If not in live mode, just re-send the current fixed range (if any)
-                # Or do nothing if it's a fixed range that hasn't changed.
-                # For simplicity, we can just re-send the default if no specific range is stored.
+                print("Received plot_boundary_update, but not in live mode. No action taken.")
                 pass # The frontend will handle re-requesting if needed for fixed ranges
         elif message_type == "dashboard_update":
             # General dashboard update (panel data, anomaly status)
@@ -177,69 +181,72 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         """Wrapper for get_latest_plot_data_point utility function."""
         return get_latest_plot_data_point()
 
-    # This is the single, combined send_plot_data function
     async def send_plot_data(self, start_time=None, end_time=None, plot_type='initial_historical'):
         """
         Fetches plot data for a given period and sends it to the client.
-        If start_time and end_time are not provided, it determines the active run time window
-        or defaults to the last 10 minutes.
-        If plot_type is 'initial_live_10_min', it forces a 10-minute window ending now.
+        This function now explicitly handles the logic for setting the time window
+        and the live_mode_active flag based on the request.
         """
-        current_plot_type = plot_type
+        current_start_time = start_time
+        current_end_time = end_time
+        is_live_mode_active_for_response = False
 
-        # Handle 'initial_live_10_min' and 'live' end_time
-        if current_plot_type == 'initial_live_10_min' or end_time == 'live':
-            dynamic_end_time = timezone.now()
-            # If start_time is not provided, default to last 10 minutes
-            if start_time is None:
-                start_time = dynamic_end_time - timedelta(minutes=10)
-            end_time = dynamic_end_time # Use the dynamically calculated end_time for fetching data
-            self.live_mode_active = True # Ensure live mode is active
+        # Case 1: Initial load or "Show current run" button -> always 10 min live
+        if plot_type == 'initial_live_10_min':
+            current_end_time = timezone.now()
+            current_start_time = current_end_time - timedelta(minutes=10)
+            is_live_mode_active_for_response = True
+            self.live_mode_active = True
+            print(f"send_plot_data: initial_live_10_min requested. Setting window to {current_start_time} - {current_end_time}. Live mode: TRUE")
 
-        # If no specific time range is provided by the client, and not in initial live mode,
-        # use the default logic to get the active run time window or last 10 minutes.
-        elif start_time is None and end_time is None:
-            start_time, end_time = await self._get_active_run_time_window()
-            # If get_active_run_time_window returns (None, None), it means no active run found,
-            # so we still want to show the last 10 minutes, but it's a static view unless
-            # the user explicitly requests 'live' or initial_live_10_min.
-            if start_time is None or end_time is None:
-                end_time = timezone.now()
-                start_time = end_time - timedelta(minutes=10)
-            current_plot_type = 'initial_historical' # This indicates it's the default historical view
-            self.live_mode_active = False # Not actively tracking live unless explicitly requested
+        # Case 2: Frontend explicitly requested 'live' end_time
+        elif end_time == 'live':
+            current_end_time = timezone.now()
+            # If a start_time was provided, use it, otherwise default to 10 min window
+            if current_start_time is None:
+                current_start_time = current_end_time - timedelta(minutes=10)
+            is_live_mode_active_for_response = True
+            self.live_mode_active = True
+            print(f"send_plot_data: live end_time requested. Setting window to {current_start_time} - {current_end_time}. Live mode: TRUE")
 
-        # Ensure start_time and end_time are not None before passing to _get_plot_data
-        # If _get_active_run_time_window also returns None or partial None, set a default 10-minute window
-        if start_time is None or end_time is None:
-            end_time = timezone.now()
-            start_time = end_time - timedelta(minutes=10)
-            current_plot_type = 'initial_historical' # Ensure type is initial if we're defaulting
-            self.live_mode_active = False # Not actively tracking live unless explicitly requested
+        # Case 3: Fixed historical range or default behavior (active run / last 10 min static)
+        else:
+            # If no start/end time provided, determine active run or default to last 10 min static
+            if current_start_time is None and current_end_time is None:
+                current_start_time, current_end_time = await self._get_active_run_time_window()
+                if current_start_time is None or current_end_time is None:
+                    current_end_time = timezone.now()
+                    current_start_time = current_end_time - timedelta(minutes=10)
+                print(f"send_plot_data: No explicit range, using active run/default 10 min static: {current_start_time} - {current_end_time}. Live mode: FALSE")
+            else:
+                print(f"send_plot_data: Fixed historical range requested: {current_start_time} - {current_end_time}. Live mode: FALSE")
 
-        # Ensure all datetime objects are timezone-aware before passing to _get_plot_data
-        # and before serializing to ISO format.
-        if start_time and not timezone.is_aware(start_time):
-            start_time = timezone.make_aware(start_time)
-        if end_time and not timezone.is_aware(end_time):
-            end_time = timezone.make_aware(end_time)
+            is_live_mode_active_for_response = False
+            self.live_mode_active = False
 
-        plot_data = await self._get_plot_data(start_time, end_time)
+        # Ensure all datetime objects are timezone-aware
+        if current_start_time and not timezone.is_aware(current_start_time):
+            current_start_time = timezone.make_aware(current_start_time)
+        if current_end_time and not timezone.is_aware(current_end_time):
+            current_end_time = timezone.make_aware(current_end_time)
+
+        plot_data = await self._get_plot_data(current_start_time, current_end_time)
 
         serializable_plot_data = to_serializable_dict(plot_data)
         await self.send(text_data=json.dumps({
             'type': 'plot_data_update',
-            'plot_type': current_plot_type,
+            'plot_type': plot_type, # Keep original plot_type for frontend context
             'data': serializable_plot_data,
-            'start_time': start_time.isoformat() if start_time else None,
-            'end_time': end_time.isoformat() if end_time else None,
-            'live_mode_active': self.live_mode_active, # Inform frontend about live mode status
+            'start_time': current_start_time.isoformat() if current_start_time else None,
+            'end_time': current_end_time.isoformat() if current_end_time else None,
+            'live_mode_active': is_live_mode_active_for_response, # Inform frontend about live mode status
         }))
+        print(f"Sent plot_data_update: start={current_start_time}, end={current_end_time}, live_mode_active={is_live_mode_active_for_response}")
 
     async def send_latest_plot_data_point(self):
         """
-        Fetches the very latest plot data point and sends it to the client.
-        This is used for continuously adding new data to the live plot.
+        Fetches the very latest LiveData, TwinData, RawData, FeatureData, and PredictionData points
+        and sends them to the client. This is used for continuous live updates.
         Only sends if live_mode_active is True.
         """
         if not self.live_mode_active:
@@ -247,12 +254,17 @@ class DashboardConsumer(AsyncWebsocketConsumer):
 
         latest_data_point = await self._get_latest_plot_data_point()
 
-        # Only send if there is actual new data
-        if latest_data_point and (latest_data_point.get('live') or latest_data_point.get('twin') or latest_data_point.get('raw')):
+        # Only send if there is actual new data for any of the categories
+        if latest_data_point and (latest_data_point.get('live') or
+                                  latest_data_point.get('twin') or
+                                  latest_data_point.get('raw') or
+                                  latest_data_point.get('feature') or
+                                  latest_data_point.get('prediction')):
             serializable_data_point = to_serializable_dict(latest_data_point)
             await self.send(text_data=json.dumps({
                 'type': 'plot_data_point',
                 'data': serializable_data_point,
             }))
+            # print(f"Sent latest plot data point: {serializable_data_point.get('raw', {}).get('current', 'N/A')}") # Uncomment for debugging
         # else:
         #     print("No new plot data point available to send.") # uncomment for debugging

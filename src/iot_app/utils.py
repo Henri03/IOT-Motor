@@ -1,4 +1,4 @@
-# IOT_PROJECT/src/iot_app/utils.py
+# path: src/iot_app/utils.py
 from .models import LiveData, TwinData, MalfunctionLog, MotorInfo, RawData, FeatureData, PredictionData
 from django.utils import timezone
 from datetime import timedelta, datetime
@@ -25,7 +25,7 @@ def get_latest_live_data():
     latest = LiveData.objects.order_by('-timestamp').first()
     if latest:
         # Current, Temp, Torque will be overridden by RawData in get_dashboard_data if available
-        data['Strom']['value'] = latest.current 
+        data['Strom']['value'] = latest.current
         data['Spannung']['value'] = latest.voltage
         data['Drehzahl']['value'] = latest.rpm
         data['Vibration']['value'] = latest.vibration
@@ -40,7 +40,7 @@ def get_latest_digital_twin():
     This replaces the previous ReferenceRun usage.
     Returns all expected keys, even if no data is available.
     """
-    
+
     data = {
         'Strom': {'value': None, 'unit': 'A'},
         'Spannung': {'value': None, 'unit': 'V'},
@@ -164,7 +164,7 @@ def get_dashboard_data():
     live_data = get_latest_live_data()
     # Get latest RawData for Current, Temperature, Torque (priority)
     raw_data_panel = get_latest_raw_data_for_dashboard()
-    
+
     # Construct real_motor_data, prioritizing RawData where available
     real_motor_data = {
         'Strom': raw_data_panel['current'] if raw_data_panel['current']['value'] is not None else live_data['Strom'],
@@ -242,7 +242,7 @@ def get_active_run_time_window():
             # The motor started, but has not yet reached an end position.
             # So it is still running, end_time is None (for now).
             end_time = None
-    
+
     # Ensure start_time and end_time are timezone-aware if they are not None
     if start_time and not timezone.is_aware(start_time):
         start_time = timezone.make_aware(start_time)
@@ -280,6 +280,7 @@ def get_plot_data(start_time=None, end_time=None):
             feature_data_queryset = feature_data_queryset.filter(timestamp__lte=end_time)
             prediction_data_queryset = prediction_data_queryset.filter(timestamp__lte=end_time)
         elif end_time == 'live':
+            # 'live' keyword means up to the current moment, but for historical fetch, filter up to now
             current_time = timezone.now()
             live_data_queryset = live_data_queryset.filter(timestamp__lte=current_time)
             twin_data_queryset = twin_data_queryset.filter(timestamp__lte=current_time)
@@ -287,6 +288,7 @@ def get_plot_data(start_time=None, end_time=None):
             feature_data_queryset = feature_data_queryset.filter(timestamp__lte=current_time)
             prediction_data_queryset = prediction_data_queryset.filter(timestamp__lte=current_time)
     else:
+        # If no end_time is provided, filter up to the current moment
         current_time = timezone.now()
         live_data_queryset = live_data_queryset.filter(timestamp__lte=current_time)
         twin_data_queryset = twin_data_queryset.filter(timestamp__lte=current_time)
@@ -306,7 +308,7 @@ def get_plot_data(start_time=None, end_time=None):
         },
         'twin': {
             'current': [], 'voltage': [], 'rpm': [], 'vibration': [], 'temp': [], 'torque': []
-        }, 
+        },
         'raw': {
             'temperature': [], 'current': [], 'torque': []
         },
@@ -316,8 +318,8 @@ def get_plot_data(start_time=None, end_time=None):
             'torque_mean': [], 'torque_min': [], 'torque_max': [], 'torque_median': [], 'torque_std': [],
         },
         'prediction': {
-            'temperature_status_value': [], 
-            'current_status_value': [], 
+            'temperature_status_value': [],
+            'current_status_value': [],
             'torque_status_value': [],
         }
     }
@@ -348,7 +350,7 @@ def get_plot_data(start_time=None, end_time=None):
         if entry.vibration is not None: plot_data['twin']['vibration'].append({'x': ts, 'y': entry.vibration})
         if entry.temp is not None: plot_data['twin']['temp'].append({'x': ts, 'y': entry.temp})
         if entry.torque is not None: plot_data['twin']['torque'].append({'x': ts, 'y': entry.torque})
- 
+
     # Process RawData with prediction status
     for entry in raw_data_queryset:
         ts = entry.timestamp.isoformat()
@@ -399,17 +401,17 @@ def get_latest_plot_data_point():
     """
     latest_live = LiveData.objects.order_by('-timestamp').first()
     latest_twin = TwinData.objects.order_by('-timestamp').first()
-    
+
     # Get latest raw data points for each metric type
     latest_raw_temp = RawData.objects.filter(metric_type='temperature').order_by('-timestamp').first()
     latest_raw_current = RawData.objects.filter(metric_type='current').order_by('-timestamp').first()
     latest_raw_torque = RawData.objects.filter(metric_type='torque').order_by('-timestamp').first()
-    
+
     # Get latest feature data points for each metric type
     latest_feature_temp = FeatureData.objects.filter(metric_type='temperature').order_by('-timestamp').first()
     latest_feature_current = FeatureData.objects.filter(metric_type='current').order_by('-timestamp').first()
     latest_feature_torque = FeatureData.objects.filter(metric_type='torque').order_by('-timestamp').first()
-    
+
     # Get latest prediction data points for each metric type
     latest_prediction_temp = PredictionData.objects.filter(metric_type='temperature').order_by('-timestamp').first()
     latest_prediction_current = PredictionData.objects.filter(metric_type='current').order_by('-timestamp').first()

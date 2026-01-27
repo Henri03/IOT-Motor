@@ -1,3 +1,7 @@
+<!--path: src/iot_app/templates/iot_app/dashboard.html-->
+
+<!--Frontend-->
+
 {% load static %}
 <!DOCTYPE html>
 <html lang="de ">
@@ -874,6 +878,7 @@
          * @param {boolean} isLiveModeActive - Indicates if the backend considers this a live-updating view.
          */
         function updateChartsWithHistoricalData(plotData, plotType, startTime, endTime, isLiveModeActive) {
+            console.log("Updating charts with historical data. Live mode active:", isLiveModeActive);
             // Clear all existing chart data
             Object.values(charts).forEach(chart => {
                 chart.data.datasets.forEach(dataset => {
@@ -890,7 +895,8 @@
                         x: new Date(p.x),
                         y: p.y,
                         pointBackgroundColor: getPointBackgroundColor(p.prediction),
-                        pointStyle: getPointStyle(p.prediction)
+                        pointStyle: getPointStyle(p.prediction),
+                        pointRadius: 1 // Ensure points are visible for raw data
                     }));
                 }
                 if (plotData.raw.temperature) {
@@ -899,7 +905,8 @@
                         x: new Date(p.x),
                         y: p.y,
                         pointBackgroundColor: getPointBackgroundColor(p.prediction),
-                        pointStyle: getPointStyle(p.prediction)
+                        pointStyle: getPointStyle(p.prediction),
+                        pointRadius: 1 // Ensure points are visible for raw data
                     }));
                 }
                 if (plotData.raw.torque) {
@@ -908,7 +915,8 @@
                         x: new Date(p.x),
                         y: p.y,
                         pointBackgroundColor: getPointBackgroundColor(p.prediction),
-                        pointStyle: getPointStyle(p.prediction)
+                        pointStyle: getPointStyle(p.prediction),
+                        pointRadius: 1 // Ensure points are visible for raw data
                     }));
                 }
             }
@@ -1004,14 +1012,17 @@
                     const now = new Date();
                     chart.options.scales.x.max = now;
                     chart.options.scales.x.min = new Date(now.getTime() - LIVE_WINDOW_MS);
+                    console.log(`Chart ${chart.canvas.id} set to live mode: min=${chart.options.scales.x.min.toLocaleTimeString()}, max=${chart.options.scales.x.max.toLocaleTimeString()}`);
                 } else if (startTime && endTime) {
                     // For fixed historical range, set min/max from provided times
                     chart.options.scales.x.min = new Date(startTime);
                     chart.options.scales.x.max = new Date(endTime);
+                    console.log(`Chart ${chart.canvas.id} set to fixed range: min=${chart.options.scales.x.min.toLocaleTimeString()}, max=${chart.options.scales.x.max.toLocaleTimeString()}`);
                 } else {
                     // Fallback to auto-scaling if no specific range and not in live mode
                     chart.options.scales.x.min = undefined;
                     chart.options.scales.x.max = undefined;
+                    console.log(`Chart ${chart.canvas.id} set to auto-scale.`);
                 }
                 chart.update('none'); // Update charts without animation
             });
@@ -1021,9 +1032,11 @@
 
             // Update the time range selector UI
             document.getElementById('plot-start-time').value = startTime ? new Date(startTime).toISOString().slice(0, 19) : '';
-            document.getElementById('plot-end-time').value = endTime && endTime !== 'live' ? new Date(endTime).toISOString().slice(0, 19) : '';
+            // Corrected: handle 'live' string for endTime
+            document.getElementById('plot-end-time').value = (endTime && endTime !== 'live') ? new Date(endTime).toISOString().slice(0, 19) : '';
             document.getElementById('end-time-mode').value = isLiveModeActive ? 'live' : 'fixed';
             document.getElementById('plot-end-time').disabled = isLiveModeActive; // Disable if in live mode
+            console.log(`UI updated: liveEndTimeMode=${liveEndTimeMode}, plot-start-time=${document.getElementById('plot-start-time').value}, plot-end-time=${document.getElementById('plot-end-time').value}, end-time-mode=${document.getElementById('end-time-mode').value}`);
         }
 
         /**
@@ -1032,13 +1045,16 @@
          * @param {Object} dataPoint - The latest data point containing live and twin metric values.
          */
         function addLatestDataPoint(dataPoint) {
+            console.log("Received new data point:", dataPoint);
             // Only update charts with new live data if liveEndTimeMode is active
             if (!liveEndTimeMode) {
+                console.log("Live mode is not active, skipping data point addition.");
                 return;
             }
 
             const now = new Date();
             const minTime = now.getTime() - LIVE_WINDOW_MS;
+            console.log(`Current time: ${now.toLocaleTimeString()}, Min time for window: ${new Date(minTime).toLocaleTimeString()}`);
 
             // Define a more robust mapping from dataPoint keys to chart IDs and dataset indices
             const chartDataMappings = {
@@ -1112,7 +1128,10 @@
 
             for (const chartId in chartDataMappings) {
                 const chart = charts[chartId];
-                if (!chart) continue; // Skip if chart not initialized
+                if (!chart) {
+                    console.warn(`Chart with ID ${chartId} not found.`);
+                    continue; // Skip if chart not initialized
+                }
 
                 // Update X-axis min/max for the sliding window
                 chart.options.scales.x.max = now;
@@ -1123,7 +1142,10 @@
                 for (const mappingType in mappings) {
                     const mapping = mappings[mappingType];
                     const dataset = chart.data.datasets[mapping.datasetIndex];
-                    if (!dataset) continue; // Skip if dataset doesn't exist
+                    if (!dataset) {
+                        console.warn(`Dataset ${mapping.datasetIndex} not found for chart ${chartId}.`);
+                        continue; // Skip if dataset doesn't exist
+                    }
 
                     let sourceData = dataPoint[mapping.dataKey];
                     let value = null;
@@ -1149,20 +1171,22 @@
                         if (predictionStatus !== null) {
                             newPoint.pointBackgroundColor = getPointBackgroundColor(predictionStatus);
                             newPoint.pointStyle = getPointStyle(predictionStatus);
-                            newPoint.pointRadius = 1; // Make points visible for raw data with prediction
-                        } else if (mapping.dataKey === 'raw') {
-                             newPoint.pointRadius = 1; // Ensure raw data points are visible even without prediction
+                            newPoint.pointRadius = 3; // Make points visible for raw data with prediction
+                        } else if (mapping.dataKey === 'raw' || mapping.dataKey === 'feature') {
+                             newPoint.pointRadius = 1; // Ensure raw and feature data points are visible even without prediction
                         }
 
                         dataset.data.push(newPoint);
+                        // console.log(`Added point to ${chartId} - ${dataset.label}: x=${newPoint.x.toLocaleTimeString()}, y=${newPoint.y}`);
 
                         // Remove data points older than the current chart's min X-axis value
                         while (dataset.data.length > 0 && dataset.data[0].x.getTime() < minTime) {
                             dataset.data.shift();
+                            // console.log(`Shifted point from ${chartId} - ${dataset.label}`);
                         }
                     }
+                    chart.update('none'); // Update chart after each dataset modification
                 }
-                chart.update('none'); // Update chart without animation
             }
             applySharedYAxisScale(); // Re-apply shared Y-axis scaling
         }
@@ -1187,11 +1211,11 @@
             // Initialize real motor current chart
             initializeChart('real-current-chart', 'Stromverlauf über die Zeit (mit Features)', [
                 { label: 'Strom (Raw)', borderColor: colors.raw, pointRadius: 1, showLine: false },
-                { label: 'Strom Mean', borderColor: colors.mean, borderWidth: 2, tension: 0.3 },
-                { label: 'Strom Min', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2] },
-                { label: 'Strom Max', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2] },
-                { label: 'Strom Median', borderColor: colors.median, borderWidth: 1, borderDash: [5, 5] },
-                { label: 'Strom Std', borderColor: colors.std, borderWidth: 1, borderDash: [1, 1] }
+                { label: 'Strom Mean', borderColor: colors.mean, borderWidth: 2, tension: 0.3, pointRadius: 1 },
+                { label: 'Strom Min', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2], pointRadius: 1 },
+                { label: 'Strom Max', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2], pointRadius: 1 },
+                { label: 'Strom Median', borderColor: colors.median, borderWidth: 1, borderDash: [5, 5], pointRadius: 1 },
+                { label: 'Strom Std', borderColor: colors.std, borderWidth: 1, borderDash: [1, 1], pointRadius: 1 }
             ], {
                 scales: {
                     y: {
@@ -1238,11 +1262,11 @@
             // Initialize real motor temperature chart
             initializeChart('real-temp-chart', 'Temperaturverlauf über die Zeit (mit Features)', [
                 { label: 'Temperatur (Raw)', borderColor: colors.temperature, pointRadius: 1, showLine: false },
-                { label: 'Temperatur Mean', borderColor: colors.mean, borderWidth: 2, tension: 0.3 },
-                { label: 'Temperatur Min', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2] },
-                { label: 'Temperatur Max', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2] },
-                { label: 'Temperatur Median', borderColor: colors.median, borderWidth: 1, borderDash: [5, 5] },
-                { label: 'Temperatur Std', borderColor: colors.std, borderWidth: 1, borderDash: [1, 1] }
+                { label: 'Temperatur Mean', borderColor: colors.mean, borderWidth: 2, tension: 0.3, pointRadius: 1 },
+                { label: 'Temperatur Min', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2], pointRadius: 1 },
+                { label: 'Temperatur Max', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2], pointRadius: 1 },
+                { label: 'Temperatur Median', borderColor: colors.median, borderWidth: 1, borderDash: [5, 5], pointRadius: 1 },
+                { label: 'Temperatur Std', borderColor: colors.std, borderWidth: 1, borderDash: [1, 1], pointRadius: 1 }
             ], {
                 scales: {
                     y: {
@@ -1254,11 +1278,11 @@
             // Initialize real motor torque chart
             initializeChart('real-torque-chart', 'Drehmomentverlauf über die Zeit (mit Features)', [
                 { label: 'Drehmoment (Raw)', borderColor: colors.raw, pointRadius: 1, showLine: false },
-                { label: 'Drehmoment Mean', borderColor: colors.mean, borderWidth: 2, tension: 0.3 },
-                { label: 'Drehmoment Min', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2] },
-                { label: 'Drehmoment Max', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2] },
-                { label: 'Drehmoment Median', borderColor: colors.median, borderWidth: 1, borderDash: [5, 5] },
-                { label: 'Drehmoment Std', borderColor: colors.std, borderWidth: 1, borderDash: [1, 1] }
+                { label: 'Drehmoment Mean', borderColor: colors.mean, borderWidth: 2, tension: 0.3, pointRadius: 1 },
+                { label: 'Drehmoment Min', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2], pointRadius: 1 },
+                { label: 'Drehmoment Max', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2], pointRadius: 1 },
+                { label: 'Drehmoment Median', borderColor: colors.median, borderWidth: 1, borderDash: [5, 5], pointRadius: 1 },
+                { label: 'Drehmoment Std', borderColor: colors.std, borderWidth: 1, borderDash: [1, 1], pointRadius: 1 }
             ], {
                 scales: {
                     y: {
@@ -1391,8 +1415,8 @@
 
         // WebSocket onclose event handler
         socket.onclose = function(e) {
-            console.error("WebSocket closed unexpectedly:", e);
-            document.getElementById('anomaly-status').textContent = "WebSocket-Verbindung getrennt. Versuche verbindung...";
+            console.error("WebSocket closed unexpectedly:", e.code, e.reason);
+            document.getElementById('anomaly-status').textContent = "WebSocket-Verbindung getrennt. Versuche erneut zu verbinden...";
             document.getElementById('anomaly-status').className = 'anomaly-status anomaly-alert';
             // Attempt to reload the page after a delay to re-establish connection
             setTimeout(() => {
@@ -1425,6 +1449,7 @@
                 actualEndTime = 'live'; // Send 'live' keyword to backend
             }
 
+            console.log(`Requesting plot data: start_time=${startTimeInput}, end_time=${actualEndTime}, end_time_mode=${endTimeMode}`);
             // Send a request to the WebSocket to fetch historical data for the specified range
             socket.send(JSON.stringify({
                 type: 'request_plot_data',
@@ -1442,6 +1467,7 @@
             document.getElementById('end-time-mode').value = 'live'; // Set to live mode
             document.getElementById('plot-end-time').disabled = true; // Disable end time input
 
+            console.log("Requesting initial data (current run/live mode)");
             // Send a request to the WebSocket to revert to displaying initial/live data
             socket.send(JSON.stringify({
                 type: 'request_initial_data'
@@ -1464,14 +1490,11 @@
         document.addEventListener('DOMContentLoaded', () => {
             const endTimeModeSelect = document.getElementById('end-time-mode');
             const endTimeInput = document.getElementById('plot-end-time');
-            // If the initial state from the backend is live, set the dropdown and disable input
-            // This flag will be updated by the first plot_data_update message received from the server
-            // after the initial connection.
-            if (endTimeModeSelect.value === 'live') {
-                endTimeInput.disabled = true;
-            } else {
-                endTimeInput.disabled = false;
-            }
+            // On initial load, we expect to be in live mode (as per socket.onopen request)
+            liveEndTimeMode = true; // Set client-side flag to true
+            endTimeModeSelect.value = 'live';
+            endTimeInput.disabled = true;
+            console.log("Initial DOMContentLoaded setup: liveEndTimeMode set to true, UI adjusted.");
         });
     </script>
 </body>
