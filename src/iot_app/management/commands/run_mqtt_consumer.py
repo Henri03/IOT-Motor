@@ -12,8 +12,6 @@ from datetime import datetime
 import asyncio
 import pytz
 
-
-
 class Command(BaseCommand):             # erlaubt es, das Skript mit 'python manage.py mqtt_consumer' in der Datei "docker-compose.yml" auszuführen.
     help = 'Startet einen MQTT-Consumer, um Sensordaten zu empfangen und in der Datenbank zu speichern.'
 
@@ -93,7 +91,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         self.stdout.write(self.style.SUCCESS(f"Abweichungsschwellenwert für Warnungen: {self.deviation_threshold}%"))
         self.stdout.write(self.style.SUCCESS(f"Datenaktualitäts-Schwellenwert: {self.data_freshness_threshold} Sekunden"))
 
-        client = mqtt.Client()
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2) # Updated to use VERSION2
         client.on_connect = async_to_sync(self._on_connect_async)
         client.on_message = async_to_sync(self._on_message_async)
         client.user_data_set({
@@ -107,7 +105,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             self.stderr.write(self.style.ERROR(f"MQTT-Verbindungsfehler: {e}"))
             self.stderr.write(self.style.ERROR("Stellen Sie sicher, dass der MQTT-Broker (Mosquitto) läuft und erreichbar ist."))
 
-    async def _on_connect_async(self, client, userdata, flags, rc):
+    async def _on_connect_async(self, client, userdata, flags, rc, properties): # Added 'properties' argument
         """
         Callback-Funktion, die aufgerufen wird, wenn der Client eine Verbindung zum Broker herstellt.
         Abonniert die konfigurierten MQTT-Topics.
@@ -200,8 +198,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
         await self._save_live_data(payload)
-        await self._notify_dashboard_group("plot_data_point")
-        self.stdout.write(self.style.SUCCESS(f"Live-Daten gespeichert und Dashboard benachrichtigt."))
+        # self.stdout.write(self.style.SUCCESS(f"Live-Daten gespeichert.")) # Commented out to reduce console spam
 
     async def _handle_twin_data(self, payload):
         """
@@ -209,8 +206,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
         await self._save_twin_data(payload)                     # await, da _save_twin_data mit @sync_to_async dekoriert ist
-        await self._notify_dashboard_group("plot_data_point")   # await, da _notify_dashboard_group async ist
-        self.stdout.write(self.style.SUCCESS(f"Twin-Daten gespeichert und Dashboard benachrichtigt."))
+        # self.stdout.write(self.style.SUCCESS(f"Twin-Daten gespeichert.")) # Commented out to reduce console spam
 
     async def _handle_malfunction_data(self, payload, topic_type):
         """
@@ -225,35 +221,26 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
     async def _handle_raw_data(self, payload, metric_type):
         """
         Verarbeitet Nachrichten von den Rohdaten-Topics.
-        Aktuell: Nur Debug-Ausgabe und Dashboard-Benachrichtigung.
+        Speichert die Daten und gibt eine Debug-Ausgabe.
         """
         await self._save_raw_data(payload, metric_type)         # await, da _save_raw_data mit @sync_to_async dekoriert ist
-        self.stdout.write(self.style.SUCCESS(f"Rohdaten für {metric_type} empfangen und gespeichert: {payload}."))
-
-        # Benachrichtigung des Dashboards erfolgt zentral in _process_and_notify_dashboard
+        # self.stdout.write(self.style.SUCCESS(f"Rohdaten für {metric_type} empfangen und gespeichert: {payload}.")) # Commented out to reduce console spam
         
-
     async def _handle_feature_data(self, payload, metric_type):
         """
         Verarbeitet Nachrichten von den Feature-Topics.
-        Aktuell: Nur Debug-Ausgabe und Dashboard-Benachrichtigung.
+        Speichert die Daten und gibt eine Debug-Ausgabe.
         """
         await self._save_feature_data(payload, metric_type)     # await, da _save_feature_data mit @sync_to_async dekoriert ist
-        self.stdout.write(self.style.SUCCESS(f"Feature-Daten für {metric_type} empfangen und gespeichert: {payload}."))
-
-        # Benachrichtigung des Dashboards erfolgt zentral in _process_and_notify_dashboard
+        # self.stdout.write(self.style.SUCCESS(f"Feature-Daten für {metric_type} empfangen und gespeichert: {payload}.")) # Commented out to reduce console spam
         
-
     async def _handle_prediction_data(self, payload, metric_type):
         """
         Verarbeitet Nachrichten von den Vorhersage-Topics.
-        Aktuell: Nur Debug-Ausgabe und Dashboard-Benachrichtigung.
+        Speichert die Daten und gibt eine Debug-Ausgabe.
         """
         await self._save_prediction_data(payload, metric_type) # await, da _save_prediction_data mit @sync_to_async dekoriert ist
-        self.stdout.write(self.style.SUCCESS(f"Vorhersagedaten für {metric_type} empfangen und gespeichert: {payload}."))
-
-        # Benachrichtigung des Dashboards erfolgt zentral in _process_and_notify_dashboard
-        
+        # self.stdout.write(self.style.SUCCESS(f"Vorhersagedaten für {metric_type} empfangen und gespeichert: {payload}.")) # Commented out to reduce console spam
 
     # --- Hilfsfunktionen für Datenbankoperationen und Channels-Kommunikation ---
 
@@ -295,6 +282,8 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             retracted_count = "N/A"
             extended_count = "N/A"
         else:
+            # Assuming MotorInfo is linked to MalfunctionLog if you want to filter by motor
+            # For now, fetching total counts if MotorInfo is not directly linked to MalfunctionLog
             retracted_count = await sync_to_async(MalfunctionLog.objects.filter(
                 description__icontains='motor fährt ein', message_type='INFO'
             ).count)()
@@ -344,7 +333,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
             "Drehmoment": {"value": latest_raw_data['torque'].value if is_data_fresh(latest_raw_data['torque'], self.data_freshness_threshold) else '-', "unit": "Nm"},
             "Laufzeit": {"value": latest_live_data.run_time if is_data_fresh(latest_live_data, self.data_freshness_threshold) else '-', "unit": "h"},
             "Anzahl eingefahren": {"value": retracted_count, "unit": ""},
-            "Anzahl ausgefahren": {"value": extended_count, "unit": ""},
+            "Anzahl ausgefahren": {"value": extended_count, "unit": ""}, 
         }
         
         # Für Twin-Daten könnten Sie eine ähnliche Logik anwenden, wenn der Twin-Publisher auch stoppen kann
@@ -377,9 +366,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         }
         dashboard_prediction_data = {
             metric: {
-                'predicted_value': getattr(data, 'predicted_value', None) if is_data_fresh(data, self.data_freshness_threshold) else None,
-                'anomaly_score': getattr(data, 'anomaly_score', None) if is_data_fresh(data, self.data_freshness_threshold) else None,
-                'rul_hours': getattr(data, 'rul_hours', None) if is_data_fresh(data, self.data_freshness_threshold) else None,
+                'status_value': getattr(data, 'status_value', None) if is_data_fresh(data, self.data_freshness_threshold) else None,
                 'timestamp': getattr(data, 'timestamp', None)
             } for metric, data in latest_prediction_data.items()
         }
@@ -594,9 +581,7 @@ class Command(BaseCommand):             # erlaubt es, das Skript mit 'python man
         PredictionData.objects.create(
             timestamp=timestamp,
             metric_type=metric_type,
-            predicted_value=payload.get('predicted_value'),
-            anomaly_score=payload.get('anomaly_score'),
-            rul_hours=payload.get('rul_hours'),
+            status_value=payload.get('value'), # Speichert den -1/1 Wert im neuen Feld
         )
 
 # Globale Hilfsfunktion für die Serialisierung
@@ -629,20 +614,35 @@ def make_aware_from_iso(iso_string):
     else:
         # If it's naive, make it timezone-aware with UTC
         return timezone.make_aware(dt_object, pytz.utc)
+        
 def _round_numeric_values_for_display(data_dict, decimal_places=2):
     """
     Recursively rounds numeric 'value' fields within a dictionary for display purposes.
     This function creates a deep copy to avoid modifying the original data.
+    It also handles the new structure of feature and prediction data.
     """
     rounded_data = {}
     for key, item in data_dict.items():
         if isinstance(item, dict):
-            if 'value' in item and isinstance(item['value'], (int, float)):
-                # Round numeric values, but keep 'N/A' or other strings as is
-                rounded_value = round(item['value'], decimal_places)
-                rounded_data[key] = {**item, 'value': rounded_value}
+            # Handle the specific structure of raw, feature, and prediction data
+            if 'value' in item and isinstance(item['value'], (int, float)): # Raw data
+                rounded_data[key] = {**item, 'value': round(item['value'], decimal_places)}
+            elif 'mean' in item and 'min' in item: # Feature data
+                rounded_item = {}
+                for sub_key, sub_value in item.items():
+                    if isinstance(sub_value, (int, float)):
+                        rounded_item[sub_key] = round(sub_value, decimal_places)
+                    else:
+                        rounded_item[sub_key] = sub_value
+                rounded_data[key] = rounded_item
+            elif 'status_value' in item: # Prediction data (new structure)
+                rounded_item = {}
+                for sub_key, sub_value in item.items():
+                    # status_value ist ein Integer (-1 oder 1), muss nicht gerundet werden
+                    rounded_item[sub_key] = sub_value
+                rounded_data[key] = rounded_item
             else:
-                # Recursively process nested dictionaries
+                # Recursively process other nested dictionaries
                 rounded_data[key] = _round_numeric_values_for_display(item, decimal_places)
         elif isinstance(item, list):
             rounded_data[key] = [_round_numeric_values_for_display(elem, decimal_places) for elem in item]

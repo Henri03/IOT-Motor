@@ -49,7 +49,7 @@ class FeatureDataAdmin(admin.ModelAdmin):
 
 @admin.register(PredictionData)
 class PredictionDataAdmin(admin.ModelAdmin):
-    list_display = ('timestamp', 'metric_type', 'predicted_value', 'anomaly_score', 'rul_hours')
+    list_display = ('timestamp', 'metric_type', 'status_value')
     list_filter = ('metric_type', 'timestamp',)
     search_fields = ('metric_type',)
     readonly_fields = ('timestamp',)    

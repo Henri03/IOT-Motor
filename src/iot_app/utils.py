@@ -118,9 +118,7 @@ def get_latest_prediction_data_for_dashboard():
     }
     dashboard_prediction_data = {
         metric: {
-            'predicted_value': getattr(data, 'predicted_value', None),
-            'anomaly_score': getattr(data, 'anomaly_score', None),
-            'rul_hours': getattr(data, 'rul_hours', None),
+            'status_value': getattr(data, 'status_value', None), # Changed from predicted_value
             'timestamp': getattr(data, 'timestamp', None)
         } for metric, data in latest_prediction_data.items()
     }
@@ -324,9 +322,10 @@ def get_plot_data(start_time=None, end_time=None):
             'torque_mean': [], 'torque_min': [], 'torque_max': [], 'torque_median': [], 'torque_std': [], 'torque_range': [],
         },
         'prediction': {
-            'temperature_predicted_value': [], 'temperature_anomaly_score': [], 'temperature_rul_hours': [],
-            'current_predicted_value': [], 'current_anomaly_score': [], 'current_rul_hours': [],
-            'torque_predicted_value': [], 'torque_anomaly_score': [], 'torque_rul_hours': [],
+            # Updated to use status_value instead of predicted_value, anomaly_score, rul_hours
+            'temperature_status_value': [], 
+            'current_status_value': [], 
+            'torque_status_value': [],
         }
     }
 
@@ -383,18 +382,13 @@ def get_plot_data(start_time=None, end_time=None):
     # Process PredictionData
     for entry in prediction_data_queryset:
         ts = entry.timestamp.isoformat()
+        # Only check for status_value now
         if entry.metric_type == 'temperature':
-            if entry.predicted_value is not None: plot_data['prediction']['temperature_predicted_value'].append({'x': ts, 'y': entry.predicted_value})
-            if entry.anomaly_score is not None: plot_data['prediction']['temperature_anomaly_score'].append({'x': ts, 'y': entry.anomaly_score})
-            if entry.rul_hours is not None: plot_data['prediction']['temperature_rul_hours'].append({'x': ts, 'y': entry.rul_hours})
+            if entry.status_value is not None: plot_data['prediction']['temperature_status_value'].append({'x': ts, 'y': entry.status_value})
         if entry.metric_type == 'current':
-            if entry.predicted_value is not None: plot_data['prediction']['current_predicted_value'].append({'x': ts, 'y': entry.predicted_value})
-            if entry.anomaly_score is not None: plot_data['prediction']['current_anomaly_score'].append({'x': ts, 'y': entry.anomaly_score})
-            if entry.rul_hours is not None: plot_data['prediction']['current_rul_hours'].append({'x': ts, 'y': entry.rul_hours})
+            if entry.status_value is not None: plot_data['prediction']['current_status_value'].append({'x': ts, 'y': entry.status_value})
         if entry.metric_type == 'torque':
-            if entry.predicted_value is not None: plot_data['prediction']['torque_predicted_value'].append({'x': ts, 'y': entry.predicted_value})
-            if entry.anomaly_score is not None: plot_data['prediction']['torque_anomaly_score'].append({'x': ts, 'y': entry.anomaly_score})
-            if entry.rul_hours is not None: plot_data['prediction']['torque_rul_hours'].append({'x': ts, 'y': entry.rul_hours})
+            if entry.status_value is not None: plot_data['prediction']['torque_status_value'].append({'x': ts, 'y': entry.status_value})
 
     return plot_data
 
@@ -479,19 +473,13 @@ def get_latest_plot_data_point():
 
     if latest_prediction_temp:
         ts = latest_prediction_temp.timestamp.isoformat()
-        if latest_prediction_temp.predicted_value is not None: data_point['prediction']['temperature_predicted_value'] = {'x': ts, 'y': latest_prediction_temp.predicted_value}
-        if latest_prediction_temp.anomaly_score is not None: data_point['prediction']['temperature_anomaly_score'] = {'x': ts, 'y': latest_prediction_temp.anomaly_score}
-        if latest_prediction_temp.rul_hours is not None: data_point['prediction']['temperature_rul_hours'] = {'x': ts, 'y': latest_prediction_temp.rul_hours}
+        if latest_prediction_temp.status_value is not None: data_point['prediction']['temperature_status_value'] = {'x': ts, 'y': latest_prediction_temp.status_value}
     if latest_prediction_current:
         ts = latest_prediction_current.timestamp.isoformat()
-        if latest_prediction_current.predicted_value is not None: data_point['prediction']['current_predicted_value'] = {'x': ts, 'y': latest_prediction_current.predicted_value}
-        if latest_prediction_current.anomaly_score is not None: data_point['prediction']['current_anomaly_score'] = {'x': ts, 'y': latest_prediction_current.anomaly_score}
-        if latest_prediction_current.rul_hours is not None: data_point['prediction']['current_rul_hours'] = {'x': ts, 'y': latest_prediction_current.rul_hours}
+        if latest_prediction_current.status_value is not None: data_point['prediction']['current_status_value'] = {'x': ts, 'y': latest_prediction_current.status_value}
     if latest_prediction_torque:
         ts = latest_prediction_torque.timestamp.isoformat()
-        if latest_prediction_torque.predicted_value is not None: data_point['prediction']['torque_predicted_value'] = {'x': ts, 'y': latest_prediction_torque.predicted_value}
-        if latest_prediction_torque.anomaly_score is not None: data_point['prediction']['torque_anomaly_score'] = {'x': ts, 'y': latest_prediction_torque.anomaly_score}
-        if latest_prediction_torque.rul_hours is not None: data_point['prediction']['torque_rul_hours'] = {'x': ts, 'y': latest_prediction_torque.rul_hours}
+        if latest_prediction_torque.status_value is not None: data_point['prediction']['torque_status_value'] = {'x': ts, 'y': latest_prediction_torque.status_value}
 
     return data_point
 

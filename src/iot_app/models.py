@@ -182,6 +182,7 @@ class FeatureData(models.Model):
 class PredictionData(models.Model):
     """
     Modell zur Speicherung von Vorhersagedaten für spezifische Metriken.
+    Speichert nur den Status (-1 oder 1).
     """
     METRIC_TYPE_CHOICES = [
         ('temperature', 'Temperatur'),
@@ -191,16 +192,14 @@ class PredictionData(models.Model):
     ]
     timestamp = models.DateTimeField(default=timezone.now, verbose_name="Zeitstempel")
     metric_type = models.CharField(max_length=50, choices=METRIC_TYPE_CHOICES, verbose_name="Metrik-Typ")
-    predicted_value = models.FloatField(null=True, blank=True, verbose_name="Vorhergesagter Wert")
-    anomaly_score = models.FloatField(null=True, blank=True, verbose_name="Anomalie-Score")
-    rul_hours = models.FloatField(null=True, blank=True, verbose_name="Restnutzungsdauer (h)")
+    status_value = models.IntegerField(verbose_name="Statuswert (-1/1)", default=-1) # Speichert -1 oder 1
 
     def __str__(self):
-        return f"Prediction Data ({self.metric_type}) - Predicted: {self.predicted_value} at {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+        return f"Prediction Data ({self.metric_type}) - Status: {self.status_value} at {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
 
     class Meta:
-        verbose_name = "Vorhersagedaten"
-        verbose_name_plural = "Vorhersagedaten"
+        verbose_name = "Vorhersage-Daten"
+        verbose_name_plural = "Vorhersage-Daten"
         ordering = ['-timestamp']
         indexes = [
             models.Index(fields=['metric_type', 'timestamp']),

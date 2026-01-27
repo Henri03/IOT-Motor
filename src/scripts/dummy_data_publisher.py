@@ -127,58 +127,61 @@ def generate_twin_data(live_data_payload):
     }
     return data
 
-def generate_feature_data(metric_value):
+def generate_feature_data_dummy(metric_value, timestamp):
     """
-    Generates dummy feature data based on a single metric value.
-    This simulates a window of data being processed to extract features.
+    Generates dummy feature data based on a single metric value and includes a timestamp.
+    For this dummy sender, constant values are used for simplicity,
+    but they are derived from the input metric_value to simulate relevance.
     """
-    # Create a dummy window of values around the current metric_value
-    # For a more realistic scenario, you'd collect actual historical data
-    # and calculate features from that.
-    window_size = 10
-    # Ensure values are within a reasonable range for the metric
-    # For example, temperature features should not be negative
-    dummy_data_window = [max(0.0, metric_value + random.uniform(-2, 2)) for _ in range(window_size)]
+    # Using the metric_value to create a range for dummy feature calculation
+    # This makes the "constant" features slightly dynamic based on the input
+    base_val = metric_value
     
-    mean_val = statistics.mean(dummy_data_window)
-    min_val = min(dummy_data_window)
-    max_val = max(dummy_data_window)
-    median_val = statistics.median(dummy_data_window)
-    std_dev_val = statistics.stdev(dummy_data_window) if window_size > 1 else 0.0
-    range_val = max_val - min_val
+    # Dummy features - these are constants for the purpose of this exercise,
+    # but slightly varied based on the input metric_value for realism.
+    mean_val = round(base_val * 1.01, 2)
+    min_val = round(base_val * 0.95, 2)
+    max_val = round(base_val * 1.05, 2)
+    median_val = round(base_val * 1.00, 2)
+    std_dev_val = round(base_val * 0.02, 2) # 2% standard deviation
+    range_val = round(max_val - min_val, 2)
 
     features = {
-        "mean": round(mean_val, 3), # Round to 3 decimal places for more precision
-        "min": round(min_val, 2),
-        "max": round(max_val, 2),
-        "median": round(median_val, 2),
-        "std": round(std_dev_val, 16), # Standard deviation can be quite precise
-        "range": round(range_val, 2),
+        "timestamp": timestamp, # Add the timestamp here
+        "mean": mean_val,
+        "min": min_val,
+        "max": max_val,
+        "median": median_val,
+        "std": std_dev_val,
+        "range": range_val,
     }
     return features
 
-def generate_prediction_data(metric_value):
+def generate_prediction_data_dummy(metric_value):
     """
-    Generates dummy prediction data based on a single metric value.
-    This simulates a model predicting future values or anomaly scores.
+    Generates dummy prediction data for a metric.
+    It sends a status (-1 for 'bad', 1 for 'good')
+    based on a simple threshold or random choice for demonstration.
     """
-    # Simple prediction: a slight deviation from the current value
-    predicted_value = round(metric_value * (1 + random.uniform(-0.02, 0.02)), 2)
+    # A simple rule for demonstration: if metric_value is above a certain threshold, it's 'bad'.
+    # Otherwise, it's 'good'.
+    # For a real scenario, this would come from a trained ML model.
+    status = 1  # Assume good by default
     
-    # Dummy anomaly score (0-1, where 1 is high anomaly)
-    anomaly_score = round(random.uniform(0.01, 0.99), 2)
+    # Introduce some variability or anomaly based on the metric value
+    if "temp" in TOPIC_PREDICTION_TEMPERATURE and metric_value > 70:
+        status = -1
+    elif "current" in TOPIC_PREDICTION_CURRENT and metric_value > 20:
+        status = -1
+    elif "torque" in TOPIC_PREDICTION_TORQUE and metric_value > 75:
+        status = -1
     
-    # Dummy prediction of remaining useful life (in hours)
-    rul = round(random.uniform(100, 5000), 0)
-
-    # Ensure timestamp is UTC and timezone-aware
-    timestamp_utc = datetime.datetime.now(utc).isoformat()
+    # Randomly introduce a 'bad' prediction for more variability
+    if random.random() < 0.1: # 10% chance of a random 'bad' prediction
+        status = -1 if status == 1 else 1 # Flip if already bad, or make it bad
 
     prediction = {
-        "predicted_value": predicted_value,
-        "anomaly_score": anomaly_score,
-        "rul_hours": rul,
-        "timestamp": timestamp_utc,
+        "value": status
     }
     return prediction
 
@@ -205,66 +208,67 @@ def publish_data():
             twin_data_payload = generate_twin_data(live_data_payload)
 
             # Publish Live Data (UNCOMMENTED)
-            client.publish(TOPIC_LIVE, json.dumps(live_data_payload))
-            print(f"Published Live Data: {live_data_payload}")
+            # client.publish(TOPIC_LIVE, json.dumps(live_data_payload))
+            # print(f"[MQTT] Gesendet → Topic: {TOPIC_LIVE} | Payload: {json.dumps(live_data_payload)}")
 
-            client.publish(TOPIC_TWIN, json.dumps(twin_data_payload))
-            print(f"Published Twin Data: {twin_data_payload}")
+            # client.publish(TOPIC_TWIN, json.dumps(twin_data_payload))
+            # print(f"[MQTT] Gesendet → Topic: {TOPIC_TWIN} | Payload: {json.dumps(twin_data_payload)}")
 
             # Extract relevant values for Raw Data
             raw_temp = live_data_payload.get('temp')
             raw_current = live_data_payload.get('current')
             raw_torque = live_data_payload.get('torque')
             
-            # Ensure timestamp is UTC and timezone-aware
+            # Use a single timestamp for raw, feature, and prediction data to ensure they are the same
             current_timestamp_utc = datetime.datetime.now(utc).isoformat()
 
             # Publish Raw Data
             if raw_temp is not None:
-                client.publish(TOPIC_RAW_TEMPERATURE, json.dumps({"timestamp": current_timestamp_utc, "value": raw_temp}))
-                print(f"Published Raw Temperature: {raw_temp}")
+                raw_temp_payload = {"timestamp": current_timestamp_utc, "value": raw_temp}
+                client.publish(TOPIC_RAW_TEMPERATURE, json.dumps(raw_temp_payload))
+                print(f"[MQTT] Gesendet → Topic: {TOPIC_RAW_TEMPERATURE} | Payload: {json.dumps(raw_temp_payload)}")
             if raw_current is not None:
-                client.publish(TOPIC_RAW_CURRENT, json.dumps({"timestamp": current_timestamp_utc, "value": raw_current}))
-                print(f"Published Raw Current: {raw_current}")
+                raw_current_payload = {"timestamp": current_timestamp_utc, "value": raw_current}
+                client.publish(TOPIC_RAW_CURRENT, json.dumps(raw_current_payload))
+                print(f"[MQTT] Gesendet → Topic: {TOPIC_RAW_CURRENT} | Payload: {json.dumps(raw_current_payload)}")
             if raw_torque is not None:
-                client.publish(TOPIC_RAW_TORQUE, json.dumps({"timestamp": current_timestamp_utc, "value": raw_torque}))
-                print(f"Published Raw Torque: {raw_torque}")
+                raw_torque_payload = {"timestamp": current_timestamp_utc, "value": raw_torque}
+                client.publish(TOPIC_RAW_TORQUE, json.dumps(raw_torque_payload))
+                print(f"[MQTT] Gesendet → Topic: {TOPIC_RAW_TORQUE} | Payload: {json.dumps(raw_torque_payload)}")
 
             # Publish Feature Data (using live data values as a base for feature calculation)
             if raw_temp is not None:
-                feature_temp_payload = generate_feature_data(raw_temp)
-                feature_temp_payload["timestamp"] = current_timestamp_utc 
+                feature_temp_payload = generate_feature_data_dummy(raw_temp, current_timestamp_utc) # Pass timestamp
                 client.publish(TOPIC_FEATURE_TEMPERATURE, json.dumps(feature_temp_payload))
-                print(f"Published Feature Temperature: {feature_temp_payload}")
+                print(f"[MQTT] Gesendet → Topic: {TOPIC_FEATURE_TEMPERATURE} | Payload: {json.dumps(feature_temp_payload)}")
             if raw_current is not None:
-                feature_current_payload = generate_feature_data(raw_current)
-                feature_current_payload["timestamp"] = current_timestamp_utc 
+                feature_current_payload = generate_feature_data_dummy(raw_current, current_timestamp_utc) # Pass timestamp
                 client.publish(TOPIC_FEATURE_CURRENT, json.dumps(feature_current_payload))
-                print(f"Published Feature Current: {feature_current_payload}")
+                print(f"[MQTT] Gesendet → Topic: {TOPIC_FEATURE_CURRENT} | Payload: {json.dumps(feature_current_payload)}")
             if raw_torque is not None:
-                feature_torque_payload = generate_feature_data(raw_torque)
-                feature_torque_payload["timestamp"] = current_timestamp_utc 
+                feature_torque_payload = generate_feature_data_dummy(raw_torque, current_timestamp_utc) # Pass timestamp
                 client.publish(TOPIC_FEATURE_TORQUE, json.dumps(feature_torque_payload))
-                print(f"Published Feature Torque: {feature_torque_payload}")
+                print(f"[MQTT] Gesendet → Topic: {TOPIC_FEATURE_TORQUE} | Payload: {json.dumps(feature_torque_payload)}")
 
             # Publish Prediction Data (using live data values as a base for prediction)
+            # The timestamp for prediction must be the same as for raw data
             if raw_temp is not None:
-                prediction_temp_payload = generate_prediction_data(raw_temp)
-               
+                prediction_temp_payload_value = generate_prediction_data_dummy(raw_temp)
+                prediction_temp_payload = {"timestamp": current_timestamp_utc, "value": prediction_temp_payload_value["value"]}
                 client.publish(TOPIC_PREDICTION_TEMPERATURE, json.dumps(prediction_temp_payload))
-                print(f"Published Prediction Temperature: {prediction_temp_payload}")
+                print(f"[MQTT] Gesendet → Topic: {TOPIC_PREDICTION_TEMPERATURE} | Payload: {json.dumps(prediction_temp_payload)}")
             if raw_current is not None:
-                prediction_current_payload = generate_prediction_data(raw_current)
-               
+                prediction_current_payload_value = generate_prediction_data_dummy(raw_current)
+                prediction_current_payload = {"timestamp": current_timestamp_utc, "value": prediction_current_payload_value["value"]}
                 client.publish(TOPIC_PREDICTION_CURRENT, json.dumps(prediction_current_payload))
-                print(f"Published Prediction Current: {prediction_current_payload}")
+                print(f"[MQTT] Gesendet → Topic: {TOPIC_PREDICTION_CURRENT} | Payload: {json.dumps(prediction_current_payload)}")
             if raw_torque is not None:
-                prediction_torque_payload = generate_prediction_data(raw_torque)
-               
+                prediction_torque_payload_value = generate_prediction_data_dummy(raw_torque)
+                prediction_torque_payload = {"timestamp": current_timestamp_utc, "value": prediction_torque_payload_value["value"]}
                 client.publish(TOPIC_PREDICTION_TORQUE, json.dumps(prediction_torque_payload))
-                print(f"Published Prediction Torque: {prediction_torque_payload}")
+                print(f"[MQTT] Gesendet → Topic: {TOPIC_PREDICTION_TORQUE} | Payload: {json.dumps(prediction_torque_payload)}")
 
-            time.sleep(5) # Publish every x seconds
+            time.sleep(5) # Publish every 5 seconds
     except KeyboardInterrupt:
         print("Publisher stopped.")
     finally:
