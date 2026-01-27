@@ -403,13 +403,16 @@
                         </div>
                         <p>Echtzeitdaten vom Frequenzumrichter und angeschlossenen Sensoren.</p>
                     </div>
-                    <!-- Grid displaying real-time sensor values -->
+                     <!-- Grid displaying real-time sensor values -->
                     <div class="data-grid" id="real-motor-data-grid">
-                        <div class="data-item"><strong>Strom:</strong> <span id="real-strom">{{ real_motor_data.Current.value|default:'N/A' }} {{ real_motor_data.Current.unit }}</span></div>
-                        <div class="data-item"><strong>Spannung:</strong> <span id="real-spannung">{{ real_motor_data.Voltage.value|default:'N/A' }} {{ real_motor_data.Voltage.unit }}</span></div>
-                        <div class="data-item"><strong>Drehzahl:</strong> <span id="real-drehzahl">{{ real_motor_data.RPM.value|default:'N/A' }} {{ real_motor_data.RPM.unit }}</span></div>
-                        <div class="data-item"><strong>Drehmoment:</strong> <span id="real-drehmoment">{{ real_motor_data.Torque.value|default:'N/A' }} {{ real_motor_data.Torque.unit }}</span></div>
-                        <div class="data-item"><strong>Laufzeit:</strong> <span id="real-run-time">{{ real_motor_data.Run_Time.value|default:'N/A' }} {{ real_motor_data.Run_Time.unit }}</span></div>
+                        <div class="data-item"><strong>Strom:</strong> <span id="real-strom">{{ real_motor_data.Strom.value|default:'N/A' }} {{ real_motor_data.Strom.unit }}</span></div>
+                        <div class="data-item"><strong>Spannung:</strong> <span id="real-spannung">{{ real_motor_data.Spannung.value|default:'N/A' }} {{ real_motor_data.Spannung.unit }}</span></div>
+                        <div class="data-item"><strong>Drehzahl:</strong> <span id="real-drehzahl">{{ real_motor_data.Drehzahl.value|default:'N/A' }} {{ real_motor_data.Drehzahl.unit }}</span></div>
+                        <div class="data-item"><strong>Vibration:</strong> <span id="real-vibration">{{ real_motor_data.Vibration.value|default:'N/A' }} {{ real_motor_data.Vibration.unit }}</span></div>
+                        <div class="data-item"><strong>Temperatur:</strong> <span id="real-temperatur">{{ real_motor_data.Temperatur.value|default:'N/A' }} {{ real_motor_data.Temperatur.unit }}</span></div>
+                        <div class="data-item"><strong>Drehmoment:</strong> <span id="real-drehmoment">{{ real_motor_data.Drehmoment.value|default:'N/A' }} {{ real_motor_data.Drehmoment.unit }}</span></div>
+                        <div class="data-item"><strong>Anzahl eingefahren:</strong> <span id="real-anzahl-eingefahren">{{ real_motor_data.Anzahl_eingefahren.value|default:'N/A' }}</span></div>
+                        <div class="data-item"><strong>Anzahl ausgefahren:</strong> <span id="real-anzahl-ausgefahren">{{ real_motor_data.Anzahl_ausgefahren.value|default:'N/A' }}</span></div>
                     </div>
                 </div>
 
@@ -463,13 +466,16 @@
                         </div>
                         <p>Modellierte Werte basierend auf dem digitalen Zwillingsmodell.</p>
                     </div>
-                    <!-- Grid displaying expected sensor values from the digital twin -->
+                     <!-- Grid displaying expected sensor values from the digital twin -->
                     <div class="data-grid" id="digital-twin-data-grid">
-                        <div class="data-item"><strong>Strom:</strong> <span id="expected-strom">{{ digital_twin_data.Current.value|default:'N/A' }} {{ digital_twin_data.Current.unit }}</span></div>
-                        <div class="data-item"><strong>Spannung:</strong> <span id="expected-spannung">{{ digital_twin_data.Voltage.value|default:'N/A' }} {{ digital_twin_data.Voltage.unit }}</span></div>
-                        <div class="data-item"><strong>Drehzahl:</strong> <span id="expected-drehzahl">{{ digital_twin_data.RPM.value|default:'N/A' }} {{ digital_twin_data.RPM.unit }}</span></div>
-                        <div class="data-item"><strong>Drehmoment:</strong> <span id="expected-drehmoment">{{ digital_twin_data.Torque.value|default:'N/A' }} {{ digital_twin_data.Torque.unit }}</span></div>
-                        <div class="data-item"><strong>Laufzeit:</strong> <span id="expected-run-time">{{ digital_twin_data.Run_Time.value|default:'N/A' }} {{ digital_twin_data.Run_Time.unit }}</span></div>
+                        <div class="data-item"><strong>Strom:</strong> <span id="expected-strom">{{ digital_twin_data.Strom.value|default:'N/A' }} {{ digital_twin_data.Strom.unit }}</span></div>
+                        <div class="data-item"><strong>Spannung:</strong> <span id="expected-spannung">{{ digital_twin_data.Spannung.value|default:'N/A' }} {{ digital_twin_data.Spannung.unit }}</span></div>
+                        <div class="data-item"><strong>Drehzahl:</strong> <span id="expected-drehzahl">{{ digital_twin_data.Drehzahl.value|default:'N/A' }} {{ digital_twin_data.Drehzahl.unit }}</span></div>
+                        <div class="data-item"><strong>Vibration:</strong> <span id="expected-vibration">{{ digital_twin_data.Vibration.value|default:'N/A' }} {{ digital_twin_data.Vibration.unit }}</span></div>
+                        <div class="data-item"><strong>Temperatur:</strong> <span id="expected-temperatur">{{ digital_twin_data.Temperatur.value|default:'N/A' }} {{ digital_twin_data.Temperatur.unit }}</span></div>
+                        <div class="data-item"><strong>Drehmoment:</strong> <span id="expected-drehmoment">{{ digital_twin_data.Drehmoment.value|default:'N/A' }} {{ digital_twin_data.Drehmoment.unit }}</span></div>
+                        <div class="data-item"><strong>Anzahl eingefahren:</strong> <span id="expected-anzahl-eingefahren">{{ digital_twin_data.Anzahl_eingefahren.value|default:'N/A' }}</span></div>
+                        <div class="data-item"><strong>Anzahl ausgefahren:</strong> <span id="expected-anzahl-ausgefahren">{{ digital_twin_data.Anzahl_ausgefahren.value|default:'N/A' }}</span></div>
                     </div>
                 </div>
 
@@ -552,12 +558,10 @@
 
         // Object to store Chart.js instances
         let charts = {};
-        // Flag to indicate if a manual time range is active for plotting
-        let manualTimeRangeActive = false;
         // Flag to indicate if the end time is set to "live"
-        let liveEndTimeMode = false;
-        // Maximum number of data points to display in real-time charts
-        const MAX_DATA_POINTS = 500;
+        let liveEndTimeMode = false; // New flag to track if the current view is live-updating
+        // Default time window for live mode in milliseconds (10 minutes)
+        const LIVE_WINDOW_MS = 10 * 60 * 1000;
 
         // Configuration for shared Y-axis scales across corresponding charts
         const yAxisSharedGroups = {
@@ -864,11 +868,12 @@
          * Updates all charts with historical data received from the server.
          * Clears existing chart data and repopulates with the new historical data.
          * @param {Object} plotData - Historical data for live, twin, raw, and feature metrics.
-         * @param {string} plotType - Type of plot data (e.g., 'initial_historical', 'historical_range').
+         * @param {string} plotType - Type of plot data (e.g., 'initial_historical', 'historical_range', 'initial_live_10_min').
          * @param {string} startTime - The start time of the historical data range.
          * @param {string} endTime - The end time of the historical data range.
+         * @param {boolean} isLiveModeActive - Indicates if the backend considers this a live-updating view.
          */
-        function updateChartsWithHistoricalData(plotData, plotType, startTime, endTime) {
+        function updateChartsWithHistoricalData(plotData, plotType, startTime, endTime, isLiveModeActive) {
             // Clear all existing chart data
             Object.values(charts).forEach(chart => {
                 chart.data.datasets.forEach(dataset => {
@@ -912,7 +917,7 @@
                 if (plotData.live.voltage) charts['real-voltage-chart'].data.datasets[0].data = plotData.live.voltage.map(p => ({x: new Date(p.x), y: p.y}));
                 if (plotData.live.rpm) charts['real-rpm-chart'].data.datasets[0].data = plotData.live.rpm.map(p => ({x: new Date(p.x), y: p.y}));
                 if (plotData.live.vibration) charts['real-vibration-chart'].data.datasets[0].data = plotData.live.vibration.map(p => ({x: new Date(p.x), y: p.y}));
-                
+
                 // Fallback for current, temp, torque if raw data was not available or empty
                 // Note: Fallback live data points will have default blue circle style as they don't have prediction
                 if (!plotData.raw || !plotData.raw.current || plotData.raw.current.length === 0) {
@@ -990,13 +995,21 @@
                 if (plotData.feature.torque_std) charts['dt-torque-chart'].data.datasets[5].data = plotData.feature.torque_std.map(p => ({x: new Date(p.x), y: p.y}));
             }
 
-            // Update chart X-axis scales based on the historical time range
+            // Update time range input fields and flags
+            liveEndTimeMode = isLiveModeActive; // Set based on backend's live_mode_active
+
             Object.values(charts).forEach(chart => {
-                if (startTime && endTime) {
+                if (isLiveModeActive) {
+                    // For live mode, set the X-axis to a dynamic 10-minute window
+                    const now = new Date();
+                    chart.options.scales.x.max = now;
+                    chart.options.scales.x.min = new Date(now.getTime() - LIVE_WINDOW_MS);
+                } else if (startTime && endTime) {
+                    // For fixed historical range, set min/max from provided times
                     chart.options.scales.x.min = new Date(startTime);
                     chart.options.scales.x.max = new Date(endTime);
                 } else {
-                    // Reset to auto-scaling if no specific time range is provided
+                    // Fallback to auto-scaling if no specific range and not in live mode
                     chart.options.scales.x.min = undefined;
                     chart.options.scales.x.max = undefined;
                 }
@@ -1006,17 +1019,11 @@
             // Apply shared Y-axis scaling after updating data
             applySharedYAxisScale();
 
-            // Update time range input fields and manualTimeRangeActive flag
-            if (plotType === 'initial_historical') {
-                document.getElementById('plot-start-time').value = startTime ? new Date(startTime).toISOString().slice(0, 19) : '';
-                document.getElementById('plot-end-time').value = endTime ? new Date(endTime).toISOString().slice(0, 19) : '';
-                document.getElementById('end-time-mode').value = 'fixed'; // Set to fixed when initial historical data is loaded
-                liveEndTimeMode = false;
-                manualTimeRangeActive = false; // Reset to live mode
-            } else if (plotType === 'historical_range') {
-                manualTimeRangeActive = true; // Stay in manual time range mode
-                liveEndTimeMode = (document.getElementById('end-time-mode').value === 'live');
-            }
+            // Update the time range selector UI
+            document.getElementById('plot-start-time').value = startTime ? new Date(startTime).toISOString().slice(0, 19) : '';
+            document.getElementById('plot-end-time').value = endTime && endTime !== 'live' ? new Date(endTime).toISOString().slice(0, 19) : '';
+            document.getElementById('end-time-mode').value = isLiveModeActive ? 'live' : 'fixed';
+            document.getElementById('plot-end-time').disabled = isLiveModeActive; // Disable if in live mode
         }
 
         /**
@@ -1025,150 +1032,166 @@
          * @param {Object} dataPoint - The latest data point containing live and twin metric values.
          */
         function addLatestDataPoint(dataPoint) {
-            // Do not update charts with new live data if a manual time range is active AND not in live end time mode
-            if (manualTimeRangeActive && !liveEndTimeMode) {
+            // Only update charts with new live data if liveEndTimeMode is active
+            if (!liveEndTimeMode) {
                 return;
             }
 
-            // Iterate through all initialized charts
-            Object.values(charts).forEach(chart => {
-                // Iterate through each dataset within the current chart
-                chart.data.datasets.forEach((dataset, datasetIndex) => {
-                    let metricKey;
-                    let sourceData;
-                    let value;
-                    let timestamp;
-                    let predictionStatus; // New: for raw data point color
+            const now = new Date();
+            const minTime = now.getTime() - LIVE_WINDOW_MS;
 
-                    // Determine the base metric key (e.g., 'current', 'temperature', 'torque')
-                    // This logic needs to be robust for both real and twin charts
-                    let isTwinChart = chart.canvas.id.startsWith('dt-');
-                    let isRawDataset = dataset.label.includes('(Raw)');
-                    let isTwinRawDataset = dataset.label.includes('(Nm) ') || dataset.label.includes('(A) ') || dataset.label.includes('(°C) ') || dataset.label.includes('(V) '); // For twin raw data
-                    let isFeatureDataset = dataset.label.includes('Mean') || dataset.label.includes('Min') || dataset.label.includes('Max') || dataset.label.includes('Median') || dataset.label.includes('Std');
+            // Define a more robust mapping from dataPoint keys to chart IDs and dataset indices
+            const chartDataMappings = {
+                'real-current-chart': {
+                    raw: { dataKey: 'raw', metric: 'current', datasetIndex: 0 },
+                    mean: { dataKey: 'feature', metric: 'current_mean', datasetIndex: 1 },
+                    min: { dataKey: 'feature', metric: 'current_min', datasetIndex: 2 },
+                    max: { dataKey: 'feature', metric: 'current_max', datasetIndex: 3 },
+                    median: { dataKey: 'feature', metric: 'current_median', datasetIndex: 4 },
+                    std: { dataKey: 'feature', metric: 'current_std', datasetIndex: 5 },
+                },
+                'real-voltage-chart': {
+                    live: { dataKey: 'live', metric: 'voltage', datasetIndex: 0 },
+                },
+                'real-rpm-chart': {
+                    live: { dataKey: 'live', metric: 'rpm', datasetIndex: 0 },
+                },
+                'real-vibration-chart': {
+                    live: { dataKey: 'live', metric: 'vibration', datasetIndex: 0 },
+                },
+                'real-temp-chart': {
+                    raw: { dataKey: 'raw', metric: 'temperature', datasetIndex: 0 },
+                    mean: { dataKey: 'feature', metric: 'temperature_mean', datasetIndex: 1 },
+                    min: { dataKey: 'feature', metric: 'temperature_min', datasetIndex: 2 },
+                    max: { dataKey: 'feature', metric: 'temperature_max', datasetIndex: 3 },
+                    median: { dataKey: 'feature', metric: 'temperature_median', datasetIndex: 4 },
+                    std: { dataKey: 'feature', metric: 'temperature_std', datasetIndex: 5 },
+                },
+                'real-torque-chart': {
+                    raw: { dataKey: 'raw', metric: 'torque', datasetIndex: 0 },
+                    mean: { dataKey: 'feature', metric: 'torque_mean', datasetIndex: 1 },
+                    min: { dataKey: 'feature', metric: 'torque_min', datasetIndex: 2 },
+                    max: { dataKey: 'feature', metric: 'torque_max', datasetIndex: 3 },
+                    median: { dataKey: 'feature', metric: 'torque_median', datasetIndex: 4 },
+                    std: { dataKey: 'feature', metric: 'torque_std', datasetIndex: 5 },
+                },
+                'dt-current-chart': {
+                    twin: { dataKey: 'twin', metric: 'current', datasetIndex: 0 },
+                    mean: { dataKey: 'feature', metric: 'current_mean', datasetIndex: 1 }, // Assuming twin also has features
+                    min: { dataKey: 'feature', metric: 'current_min', datasetIndex: 2 },
+                    max: { dataKey: 'feature', metric: 'current_max', datasetIndex: 3 },
+                    median: { dataKey: 'feature', metric: 'current_median', datasetIndex: 4 },
+                    std: { dataKey: 'feature', metric: 'current_std', datasetIndex: 5 },
+                },
+                'dt-voltage-chart': {
+                    twin: { dataKey: 'twin', metric: 'voltage', datasetIndex: 0 },
+                },
+                'dt-rpm-chart': {
+                    twin: { dataKey: 'twin', metric: 'rpm', datasetIndex: 0 },
+                },
+                'dt-vibration-chart': {
+                    twin: { dataKey: 'twin', metric: 'vibration', datasetIndex: 0 },
+                },
+                'dt-temp-chart': {
+                    twin: { dataKey: 'twin', metric: 'temperature', datasetIndex: 0 },
+                    mean: { dataKey: 'feature', metric: 'temperature_mean', datasetIndex: 1 },
+                    min: { dataKey: 'feature', metric: 'temperature_min', datasetIndex: 2 },
+                    max: { dataKey: 'feature', metric: 'temperature_max', datasetIndex: 3 },
+                    median: { dataKey: 'feature', metric: 'temperature_median', datasetIndex: 4 },
+                    std: { dataKey: 'feature', metric: 'temperature_std', datasetIndex: 5 },
+                },
+                'dt-torque-chart': {
+                    twin: { dataKey: 'twin', metric: 'torque', datasetIndex: 0 },
+                    mean: { dataKey: 'feature', metric: 'torque_mean', datasetIndex: 1 },
+                    min: { dataKey: 'feature', metric: 'torque_min', datasetIndex: 2 },
+                    max: { dataKey: 'feature', metric: 'torque_max', datasetIndex: 3 },
+                    median: { dataKey: 'feature', metric: 'torque_median', datasetIndex: 4 },
+                    std: { dataKey: 'feature', metric: 'torque_std', datasetIndex: 5 },
+                },
+            };
 
-                    if (dataset.label.includes('Strom')) {
-                        metricKey = 'current';
-                    } else if (dataset.label.includes('Spannung')) {
-                        metricKey = 'voltage';
-                    } else if (dataset.label.includes('Drehmoment')) {
-                        metricKey = 'torque';
-                    } else if (dataset.label.includes('Temperatur')) {
-                        metricKey = 'temperature';
-                    } else if (dataset.label.includes('Drehzahl')) {
-                        metricKey = 'rpm';
-                    } else if (dataset.label.includes('Vibration')) {
-                        metricKey = 'vibration';
-                    } else {
-                        // If it's a feature dataset, extract the base metric
-                        if (isFeatureDataset) {
-                            metricKey = dataset.label.split(' ')[0].toLowerCase().replace('drehmoment', 'torque').replace('strom', 'current').replace('temperatur', 'temperature');
-                        } else {
-                            return; // Skip if metric key cannot be determined
+            for (const chartId in chartDataMappings) {
+                const chart = charts[chartId];
+                if (!chart) continue; // Skip if chart not initialized
+
+                // Update X-axis min/max for the sliding window
+                chart.options.scales.x.max = now;
+                chart.options.scales.x.min = new Date(minTime);
+
+                const mappings = chartDataMappings[chartId];
+
+                for (const mappingType in mappings) {
+                    const mapping = mappings[mappingType];
+                    const dataset = chart.data.datasets[mapping.datasetIndex];
+                    if (!dataset) continue; // Skip if dataset doesn't exist
+
+                    let sourceData = dataPoint[mapping.dataKey];
+                    let value = null;
+                    let timestamp = null;
+                    let predictionStatus = null;
+
+                    if (sourceData && sourceData[mapping.metric]) {
+                        value = sourceData[mapping.metric].y;
+                        timestamp = new Date(sourceData[mapping.metric].x);
+                        // Only raw data points have prediction status directly attached
+                        if (mapping.dataKey === 'raw' && sourceData[mapping.metric].prediction !== undefined) {
+                            predictionStatus = sourceData[mapping.metric].prediction;
                         }
+                    } else if (mapping.dataKey === 'raw' && dataPoint.live && dataPoint.live[mapping.metric]) {
+                        // Fallback for raw data if live data is available and raw is not
+                        value = dataPoint.live[mapping.metric].y;
+                        timestamp = new Date(dataPoint.live[mapping.metric].x);
+                        // No prediction status for fallback live data
                     }
 
-                    if (isFeatureDataset) {
-                        const featureType = dataset.label.split(' ')[1].toLowerCase(); // e.g., 'mean'
-                        const featureKey = metricKey + '_' + featureType;
-                        sourceData = dataPoint.feature[featureKey];
-                        if (sourceData) {
-                            value = sourceData.y;
-                            timestamp = new Date(sourceData.x);
-                        }
-                    } else if (isTwinChart) { // Digital Twin data
-                        if (isTwinRawDataset) { // Twin raw data
-                            sourceData = dataPoint.twin;
-                            if (sourceData && sourceData[metricKey]) {
-                                value = sourceData[metricKey].y;
-                                timestamp = new Date(sourceData[metricKey].x);
-                            }
-                        }
-                        // For twin charts, if it's not raw twin data, it must be a feature dataset
-                        // This case is handled by the `isFeatureDataset` block above
-                    } else { // Real motor data (Raw or Live)
-                        if (isRawDataset) { // Real raw data
-                            sourceData = dataPoint.raw;
-                            if (sourceData && sourceData[metricKey]) {
-                                value = sourceData[metricKey].y;
-                                timestamp = new Date(sourceData[metricKey].x);
-                                predictionStatus = dataPoint.raw[metricKey].prediction;
-                            } else { // Fallback to live if raw is not available
-                                sourceData = dataPoint.live;
-                                if (sourceData && sourceData[metricKey]) {
-                                    value = sourceData[metricKey].y;
-                                    timestamp = new Date(sourceData[metricKey].x);
-                                }
-                            }
-                        } else { // Live data (Voltage, RPM, Vibration)
-                            sourceData = dataPoint.live;
-                            if (sourceData && sourceData[metricKey]) {
-                                value = sourceData[metricKey].y;
-                                timestamp = new Date(sourceData[metricKey].x);
-                            }
-                        }
-                    }
-                    
-                    if (value !== undefined && timestamp) {
+                    if (value !== null && timestamp) {
                         const newPoint = { x: timestamp, y: value };
-                        if (predictionStatus !== undefined) {
+                        if (predictionStatus !== null) {
                             newPoint.pointBackgroundColor = getPointBackgroundColor(predictionStatus);
                             newPoint.pointStyle = getPointStyle(predictionStatus);
-                            newPoint.pointRadius = 2; // Make points visible for raw data with prediction
+                            newPoint.pointRadius = 1; // Make points visible for raw data with prediction
+                        } else if (mapping.dataKey === 'raw') {
+                             newPoint.pointRadius = 1; // Ensure raw data points are visible even without prediction
                         }
+
                         dataset.data.push(newPoint);
-                    }
 
-                    // Remove oldest data points if MAX_DATA_POINTS limit is exceeded
-                    if (dataset.data.length > MAX_DATA_POINTS) {
-                        dataset.data.splice(0, dataset.data.length - MAX_DATA_POINTS);
-                    }
-                });
-
-                // Adjust X-axis min/max to show the latest MAX_DATA_POINTS
-                // This logic should only apply if not in a manual time range and not in live end time mode
-                if (!manualTimeRangeActive || liveEndTimeMode) {
-                    if (chart.data.datasets[0] && chart.data.datasets[0].data.length > 0) {
-                        const firstTimestamp = chart.data.datasets[0].data[0].x;
-                        const lastTimestamp = chart.data.datasets[0].data[chart.data.datasets[0].data.length - 1].x;
-                        
-                        if (liveEndTimeMode) {
-                            // If live end time mode is active, set max to current time and adjust min to maintain window
-                            chart.options.scales.x.max = new Date(); // Current time
-                            // Calculate min to maintain the window size based on MAX_DATA_POINTS and data frequency
-                            // This is a simplification; a more robust solution might involve average time difference
-                            if (chart.data.datasets[0].data.length > 1) { // Use chart.data.datasets[0].data.length
-                                const timeDiff = lastTimestamp.getTime() - firstTimestamp.getTime();
-                                chart.options.scales.x.min = new Date(chart.options.scales.x.max.getTime() - timeDiff);
-                            } else {
-                                chart.options.scales.x.min = firstTimestamp;
-                            }
-                        } else { // Not in manual range, not live end time -> auto-scaling for live data
-                            chart.options.scales.x.min = firstTimestamp;
-                            chart.options.scales.x.max = lastTimestamp;
+                        // Remove data points older than the current chart's min X-axis value
+                        while (dataset.data.length > 0 && dataset.data[0].x.getTime() < minTime) {
+                            dataset.data.shift();
                         }
-                    } else {
-                        // Reset X-axis to auto if no data
-                        chart.options.scales.x.min = undefined;
-                        chart.options.scales.x.max = undefined;
                     }
                 }
-
                 chart.update('none'); // Update chart without animation
-            });
+            }
             applySharedYAxisScale(); // Re-apply shared Y-axis scaling
         }
 
         // Event listener for when the DOM is fully loaded
         document.addEventListener('DOMContentLoaded', () => {
+            // Define a consistent color palette for each metric type and its features
+            const colors = {
+                raw: 'rgb(0, 150, 136)',        // Teal for raw current
+                mean: 'rgb(255, 159, 64)',      // Orange for mean
+                min: 'rgb(75, 192, 192)',       // Light Teal for min
+                max: 'rgb(255, 99, 132)',       // Red for max
+                median: 'rgb(54, 162, 235)',    // Blue for median
+                std: 'rgb(153, 102, 255)',      // Purple for std
+                voltage: 'rgb(255, 99, 132)',   // Red for voltage
+                rpm: 'rgb(54, 162, 235)',       // Blue for RPM
+                vibration: 'rgb(255, 205, 86)', // Yellow for vibration
+                temperature: 'rgb(153, 102, 255)', // Purple for raw temperature
+                torque: 'rgb(255, 159, 64)'     // Orange for raw torque
+            };
+
             // Initialize real motor current chart
             initializeChart('real-current-chart', 'Stromverlauf über die Zeit (mit Features)', [
-                { label: 'Strom (Raw)', borderColor: 'rgb(0, 150, 136)', pointRadius: 2, showLine: false }, // Teal
-                { label: 'Strom Mean', borderColor: 'rgb(255, 159, 64)', borderWidth: 2, tension: 0.3 }, // Orange
-                { label: 'Strom Min', borderColor: 'rgb(75, 192, 192)', borderWidth: 1, borderDash: [2, 2] }, // Light Teal
-                { label: 'Strom Max', borderColor: 'rgb(255, 99, 132)', borderWidth: 1, borderDash: [2, 2] }, // Red
-                { label: 'Strom Median', borderColor: 'rgb(54, 162, 235)', borderWidth: 1, borderDash: [5, 5] }, // Blue
-                { label: 'Strom Std', borderColor: 'rgb(153, 102, 255)', borderWidth: 1, borderDash: [1, 1] } // Purple
+                { label: 'Strom (Raw)', borderColor: colors.raw, pointRadius: 1, showLine: false },
+                { label: 'Strom Mean', borderColor: colors.mean, borderWidth: 2, tension: 0.3 },
+                { label: 'Strom Min', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2] },
+                { label: 'Strom Max', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2] },
+                { label: 'Strom Median', borderColor: colors.median, borderWidth: 1, borderDash: [5, 5] },
+                { label: 'Strom Std', borderColor: colors.std, borderWidth: 1, borderDash: [1, 1] }
             ], {
                 scales: {
                     y: {
@@ -1180,7 +1203,7 @@
 
             // Initialize real motor voltage chart
             initializeChart('real-voltage-chart', 'Spannungsverlauf über die Zeit', [
-                { label: 'Spannung (V)', borderColor: 'rgb(255, 99, 132)' }
+                { label: 'Spannung (V)', borderColor: colors.voltage }
             ], {
                 scales: {
                     y: {
@@ -1192,7 +1215,7 @@
 
             // Initialize real motor RPM chart
             initializeChart('real-rpm-chart', 'Drehzahlverlauf über die Zeit', [
-                { label: 'Drehzahl (U/min)', borderColor: 'rgb(54, 162, 235)' }
+                { label: 'Drehzahl (U/min)', borderColor: colors.rpm }
             ], {
                 scales: {
                     y: {
@@ -1203,7 +1226,7 @@
             });
             // Initialize real motor vibration chart
             initializeChart('real-vibration-chart', 'Vibrationsverlauf über die Zeit', [
-                { label: 'Vibration (mm/s)', borderColor: 'rgb(255, 205, 86)' }
+                { label: 'Vibration (mm/s)', borderColor: colors.vibration }
             ], {
                 scales: {
                     y: {
@@ -1214,12 +1237,12 @@
             });
             // Initialize real motor temperature chart
             initializeChart('real-temp-chart', 'Temperaturverlauf über die Zeit (mit Features)', [
-                { label: 'Temperatur (Raw)', borderColor: 'rgb(153, 102, 255)', pointRadius: 2, showLine: false }, // Raw data as points
-                { label: 'Temperatur Mean', borderColor: 'rgba(153, 102, 255, 0.7)', borderWidth: 2, tension: 0.3 },
-                { label: 'Temperatur Min', borderColor: 'rgba(0, 123, 255, 0.7)', borderWidth: 1, borderDash: [2, 2] },
-                { label: 'Temperatur Max', borderColor: 'rgba(255, 0, 0, 0.7)', borderWidth: 1, borderDash: [2, 2] },
-                { label: 'Temperatur Median', borderColor: 'rgba(255, 165, 0, 0.7)', borderWidth: 1, borderDash: [5, 5] },
-                { label: 'Temperatur Std', borderColor: 'rgba(128, 128, 128, 0.7)', borderWidth: 1, borderDash: [1, 1] }
+                { label: 'Temperatur (Raw)', borderColor: colors.temperature, pointRadius: 1, showLine: false },
+                { label: 'Temperatur Mean', borderColor: colors.mean, borderWidth: 2, tension: 0.3 },
+                { label: 'Temperatur Min', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2] },
+                { label: 'Temperatur Max', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2] },
+                { label: 'Temperatur Median', borderColor: colors.median, borderWidth: 1, borderDash: [5, 5] },
+                { label: 'Temperatur Std', borderColor: colors.std, borderWidth: 1, borderDash: [1, 1] }
             ], {
                 scales: {
                     y: {
@@ -1230,12 +1253,12 @@
             });
             // Initialize real motor torque chart
             initializeChart('real-torque-chart', 'Drehmomentverlauf über die Zeit (mit Features)', [
-                { label: 'Drehmoment (Raw)', borderColor: 'rgb(255, 159, 64)', pointRadius: 2, showLine: false }, // Raw data as points
-                { label: 'Drehmoment Mean', borderColor: 'rgba(255, 159, 64, 0.7)', borderWidth: 2, tension: 0.3 },
-                { label: 'Drehmoment Min', borderColor: 'rgba(0, 123, 255, 0.7)', borderWidth: 1, borderDash: [2, 2] },
-                { label: 'Drehmoment Max', borderColor: 'rgba(255, 0, 0, 0.7)', borderWidth: 1, borderDash: [2, 2] },
-                { label: 'Drehmoment Median', borderColor: 'rgba(255, 165, 0, 0.7)', borderWidth: 1, borderDash: [5, 5] },
-                { label: 'Drehmoment Std', borderColor: 'rgba(128, 128, 128, 0.7)', borderWidth: 1, borderDash: [1, 1] }
+                { label: 'Drehmoment (Raw)', borderColor: colors.raw, pointRadius: 1, showLine: false },
+                { label: 'Drehmoment Mean', borderColor: colors.mean, borderWidth: 2, tension: 0.3 },
+                { label: 'Drehmoment Min', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2] },
+                { label: 'Drehmoment Max', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2] },
+                { label: 'Drehmoment Median', borderColor: colors.median, borderWidth: 1, borderDash: [5, 5] },
+                { label: 'Drehmoment Std', borderColor: colors.std, borderWidth: 1, borderDash: [1, 1] }
             ], {
                 scales: {
                     y: {
@@ -1247,12 +1270,12 @@
 
             // Initialize digital twin current chart with dashed lines
             initializeChart('dt-current-chart', 'Stromverlauf über die Zeit (Modell)', [
-                { label: 'Strom (A) ', borderColor: 'rgb(0, 150, 136)' }, // Teal, no dash for twin if real has no dash
-                { label: 'Strom Mean ', borderColor: 'rgb(255, 159, 64)', borderWidth: 2, tension: 0.3 }, // Orange
-                { label: 'Strom Min ', borderColor: 'rgb(75, 192, 192)', borderWidth: 1, borderDash: [2, 2] }, // Light Teal
-                { label: 'Strom Max ', borderColor: 'rgb(255, 99, 132)', borderWidth: 1, borderDash: [2, 2] }, // Red
-                { label: 'Strom Median ', borderColor: 'rgb(54, 162, 235)', borderWidth: 1, borderDash: [5, 5] }, // Blue
-                { label: 'Strom Std ', borderColor: 'rgb(153, 102, 255)', borderWidth: 1, borderDash: [1, 1] } // Purple
+                { label: 'Strom (A) ', borderColor: colors.raw },
+                { label: 'Strom Mean ', borderColor: colors.mean, borderWidth: 2, tension: 0.3 },
+                { label: 'Strom Min ', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2] },
+                { label: 'Strom Max ', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2] },
+                { label: 'Strom Median ', borderColor: colors.median, borderWidth: 1, borderDash: [5, 5] },
+                { label: 'Strom Std ', borderColor: colors.std, borderWidth: 1, borderDash: [1, 1] }
             ], {
                 scales: {
                     y: {
@@ -1264,7 +1287,7 @@
 
             // Initialize digital twin voltage chart with dashed lines
             initializeChart('dt-voltage-chart', 'Spannungsverlauf über die Zeit (Modell)', [
-                { label: 'Spannung (V) ', borderColor: 'rgb(255, 99, 132)' } // No dash for twin if real has no dash
+                { label: 'Spannung (V) ', borderColor: colors.voltage }
             ], {
                 scales: {
                     y: {
@@ -1276,7 +1299,7 @@
 
             // Initialize digital twin RPM chart with dashed lines
             initializeChart('dt-rpm-chart', 'Drehzahlverlauf über die Zeit (Modell)', [
-                { label: 'Drehzahl (U/min) ', borderColor: 'rgb(54, 162, 235)' } // No dash for twin if real has no dash
+                { label: 'Drehzahl (U/min) ', borderColor: colors.rpm }
             ], {
                 scales: {
                     y: {
@@ -1287,7 +1310,7 @@
             });
             // Initialize digital twin vibration chart with dashed lines
             initializeChart('dt-vibration-chart', 'Vibrationsverlauf über die Zeit (Modell)', [
-                { label: 'Vibration (mm/s) ', borderColor: 'rgb(255, 205, 86)' } // No dash for twin if real has no dash
+                { label: 'Vibration (mm/s) ', borderColor: colors.vibration }
             ], {
                 scales: {
                     y: {
@@ -1298,12 +1321,12 @@
             });
             // Initialize digital twin temperature chart with dashed lines
             initializeChart('dt-temp-chart', 'Temperaturverlauf über die Zeit (Modell)', [
-                { label: 'Temperatur (°C) ', borderColor: 'rgb(153, 102, 255)' }, // No dash for twin if real has no dash
-                { label: 'Temperatur Mean ', borderColor: 'rgba(153, 102, 255, 0.7)', borderWidth: 2, tension: 0.3 },
-                { label: 'Temperatur Min ', borderColor: 'rgba(0, 123, 255, 0.7)', borderWidth: 1, borderDash: [2, 2] },
-                { label: 'Temperatur Max ', borderColor: 'rgba(255, 0, 0, 0.7)', borderWidth: 1, borderDash: [2, 2] },
-                { label: 'Temperatur Median ', borderColor: 'rgba(255, 165, 0, 0.7)', borderWidth: 1, borderDash: [5, 5] },
-                { label: 'Temperatur Std ', borderColor: 'rgba(128, 128, 128, 0.7)', borderWidth: 1, borderDash: [1, 1] }
+                { label: 'Temperatur (°C) ', borderColor: colors.temperature },
+                { label: 'Temperatur Mean ', borderColor: colors.mean, borderWidth: 2, tension: 0.3 },
+                { label: 'Temperatur Min ', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2] },
+                { label: 'Temperatur Max ', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2] },
+                { label: 'Temperatur Median ', borderColor: colors.median, borderWidth: 1, borderDash: [5, 5] },
+                { label: 'Temperatur Std ', borderColor: colors.std, borderWidth: 1, borderDash: [1, 1] }
             ], {
                 scales: {
                     y: {
@@ -1314,12 +1337,12 @@
             });
             // Initialize digital twin torque chart with dashed lines
             initializeChart('dt-torque-chart', 'Drehmomentverlauf über die Zeit (Modell)', [
-                { label: 'Drehmoment (Nm) ', borderColor: 'rgb(255, 159, 64)' }, // No dash for twin if real has no dash
-                { label: 'Drehmoment Mean ', borderColor: 'rgba(255, 159, 64, 0.7)', borderWidth: 2, tension: 0.3 },
-                { label: 'Drehmoment Min ', borderColor: 'rgba(0, 123, 255, 0.7)', borderWidth: 1, borderDash: [2, 2] },
-                { label: 'Drehmoment Max ', borderColor: 'rgba(255, 0, 0, 0.7)', borderWidth: 1, borderDash: [2, 2] },
-                { label: 'Drehmoment Median ', borderColor: 'rgba(255, 165, 0, 0.7)', borderWidth: 1, borderDash: [5, 5] },
-                { label: 'Drehmoment Std ', borderColor: 'rgba(128, 128, 128, 0.7)', borderWidth: 1, borderDash: [1, 1] }
+                { label: 'Drehmoment (Nm) ', borderColor: colors.raw },
+                { label: 'Drehmoment Mean ', borderColor: colors.mean, borderWidth: 2, tension: 0.3 },
+                { label: 'Drehmoment Min ', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2] },
+                { label: 'Drehmoment Max ', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2] },
+                { label: 'Drehmoment Median ', borderColor: colors.median, borderWidth: 1, borderDash: [5, 5] },
+                { label: 'Drehmoment Std ', borderColor: colors.std, borderWidth: 1, borderDash: [1, 1] }
             ], {
                 scales: {
                     y: {
@@ -1333,6 +1356,7 @@
         // WebSocket onopen event handler
         socket.onopen = function(e) {
             console.log("WebSocket connection established.");
+            // On initial load, request the "last 10 minutes live" view
             socket.send(JSON.stringify({
                 type: 'request_initial_data'
             }));
@@ -1353,23 +1377,10 @@
                     updateUI(data.message);
                 } else if (data.type === 'plot_data_update') {
                     // Update charts with historical data
-                    updateChartsWithHistoricalData(data.data, data.plot_type, data.start_time, data.end_time);
-                    // Adjust manualTimeRangeActive and liveEndTimeMode flags based on plot_type
-                    if (data.plot_type === 'initial_historical') {
-                        document.getElementById('plot-start-time').value = data.start_time ? new Date(data.start_time).toISOString().slice(0, 19) : '';
-                        document.getElementById('plot-end-time').value = data.end_time ? new Date(data.end_time).toISOString().slice(0, 19) : '';
-                        document.getElementById('end-time-mode').value = 'fixed'; // Reset to fixed for initial load
-                        liveEndTimeMode = false;
-                        manualTimeRangeActive = false; // Back to live mode
-                    } else if (data.plot_type === 'historical_range') {
-                        manualTimeRangeActive = true; // Stay in manual range mode
-                        liveEndTimeMode = (document.getElementById('end-time-mode').value === 'live');
-                    }
+                    updateChartsWithHistoricalData(data.data, data.plot_type, data.start_time, data.end_time, data.live_mode_active);
                 } else if (data.type === 'plot_data_point') {
-                    // Add new live data point if not in manual time range mode OR if in live end time mode
-                    if (!manualTimeRangeActive || liveEndTimeMode) {
-                        addLatestDataPoint(data.data);
-                    }
+                    // Add new live data point if liveEndTimeMode is active
+                    addLatestDataPoint(data.data);
                 } else {
                     console.warn("[WARN] Unhandled WebSocket message type:", data.type);
                 }
@@ -1420,8 +1431,7 @@
                 start_time: startTimeInput,
                 end_time: actualEndTime // Use 'live' or the fixed date
             }));
-            manualTimeRangeActive = true; // Set flag to indicate manual time range is active
-            liveEndTimeMode = (endTimeMode === 'live'); // Update liveEndTimeMode flag
+            // The backend will set live_mode_active and send it back in plot_data_update
         });
 
         // Event listener for the "Show Current Run" button
@@ -1429,13 +1439,14 @@
             // Clear the time range input fields
             document.getElementById('plot-start-time').value = '';
             document.getElementById('plot-end-time').value = '';
-            document.getElementById('end-time-mode').value = 'fixed'; // Reset to fixed
+            document.getElementById('end-time-mode').value = 'live'; // Set to live mode
+            document.getElementById('plot-end-time').disabled = true; // Disable end time input
+
             // Send a request to the WebSocket to revert to displaying initial/live data
             socket.send(JSON.stringify({
                 type: 'request_initial_data'
             }));
-            manualTimeRangeActive = false; // Reset flag to indicate live mode
-            liveEndTimeMode = false; // Reset live end time mode
+            // The backend will set live_mode_active to true and send it back
         });
 
         // Event listener for the end-time-mode dropdown
@@ -1446,6 +1457,20 @@
                 endTimeInput.value = ''; // Clear any existing fixed end time
             } else {
                 endTimeInput.disabled = false; // Enable fixed end time input
+            }
+        });
+
+        // Initial setup for end-time-mode on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            const endTimeModeSelect = document.getElementById('end-time-mode');
+            const endTimeInput = document.getElementById('plot-end-time');
+            // If the initial state from the backend is live, set the dropdown and disable input
+            // This flag will be updated by the first plot_data_update message received from the server
+            // after the initial connection.
+            if (endTimeModeSelect.value === 'live') {
+                endTimeInput.disabled = true;
+            } else {
+                endTimeInput.disabled = false;
             }
         });
     </script>
