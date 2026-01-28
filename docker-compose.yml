@@ -50,6 +50,7 @@ services:
     image: redis:7
     ports:
       - "6379:6379"
+    command: redis-server --loglevel warning
     restart: unless-stopped
 
   mqtt_broker:

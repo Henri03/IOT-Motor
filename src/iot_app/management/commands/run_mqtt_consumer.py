@@ -161,7 +161,7 @@ class Command(BaseCommand):
         command_instance = userdata['command_instance']
 
         # Zentralisierte Protokollierung für empfangene Nachrichten
-        command_instance.stdout.write(f"Empfangen auf Topic: {msg.topic}, Payload: {msg.payload.decode()}")
+        #command_instance.stdout.write(f"Empfangen auf Topic: {msg.topic}, Payload: {msg.payload.decode()}")
 
         try:
             payload = json.loads(msg.payload.decode())

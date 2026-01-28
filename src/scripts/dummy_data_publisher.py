@@ -19,6 +19,9 @@ TOPIC_TWIN = "iot/motor/twin"
 TOPIC_RAW_TEMPERATURE = "raw/temperature"
 TOPIC_RAW_CURRENT = "raw/current"
 TOPIC_RAW_TORQUE = "raw/torque"
+# New topics added as per request
+TOPIC_RAW_VIBRATION_VIN = "Sensor/vin/vibration_raw"
+TOPIC_RAW_GPIO_RPM = "Sensor/gpio/rpm"
 
 # Feature Data Topics
 TOPIC_FEATURE_TEMPERATURE = "feature/temperature"
@@ -215,6 +218,8 @@ def publish_data():
             raw_temp = live_data_payload.get('temp')
             raw_current = live_data_payload.get('current')
             raw_torque = live_data_payload.get('torque')
+            raw_vibration = live_data_payload.get('vibration') # Extract vibration for new topic
+            raw_rpm = live_data_payload.get('rpm') # Extract rpm for new topic
             
             # Use a single timestamp for raw, feature, and prediction data to ensure they are the same
             current_timestamp_utc = datetime.datetime.now(utc).isoformat()
@@ -232,6 +237,17 @@ def publish_data():
                 raw_torque_payload = {"timestamp": current_timestamp_utc, "value": raw_torque}
                 client.publish(TOPIC_RAW_TORQUE, json.dumps(raw_torque_payload))
                 print(f"[MQTT] Sent → Topic: {TOPIC_RAW_TORQUE} | Payload: {json.dumps(raw_torque_payload)}")
+            
+            # Publish new raw data topics
+            if raw_vibration is not None:
+                # For Sensor/vin/vibration_raw, value should be an integer
+                raw_vibration_payload = {"timestamp": current_timestamp_utc, "value": int(raw_vibration * 10000)} # Example conversion to integer
+                client.publish(TOPIC_RAW_VIBRATION_VIN, json.dumps(raw_vibration_payload))
+                print(f"[MQTT] Sent → Topic: {TOPIC_RAW_VIBRATION_VIN} | Payload: {json.dumps(raw_vibration_payload)}")
+            if raw_rpm is not None:
+                raw_rpm_payload = {"timestamp": current_timestamp_utc, "value": raw_rpm}
+                client.publish(TOPIC_RAW_GPIO_RPM, json.dumps(raw_rpm_payload))
+                print(f"[MQTT] Sent → Topic: {TOPIC_RAW_GPIO_RPM} | Payload: {json.dumps(raw_rpm_payload)}")
 
             # Publish Feature Data (using live data values as a base for feature calculation)
             if raw_temp is not None:

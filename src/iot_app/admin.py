@@ -20,12 +20,6 @@ class TwinDataAdmin(admin.ModelAdmin):
     search_fields = ('current',)
     readonly_fields = ('timestamp',)
 
-@admin.register(ReferenceRun)
-class ReferenceRunAdmin(admin.ModelAdmin):
-    list_display = ('name', 'timestamp', 'is_valid', 'current', 'voltage', 'rpm', 'vibration', 'temp', 'torque', 'run_time')
-    list_filter = ('is_valid',)
-    search_fields = ('name',)
-
 @admin.register(MalfunctionLog)
 class MalfunctionLogAdmin(admin.ModelAdmin):
     list_display = ('timestamp', 'message_type', 'description', 'motor_state', 'emergency_stop_active')

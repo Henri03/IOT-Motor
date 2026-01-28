@@ -8,7 +8,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Set the title of the dashboard using motor information -->
+    <!-- Set the title of the dashboard using  motor information -->
     <title>IoT Dashboard: {{ motor_info.name }}</title>
     <style>
         /* Basic styling for the body */
@@ -567,6 +567,7 @@
         // Flag to indicate if the end time is set to "live"
         let liveEndTimeMode = false; // New flag to track if the current view is live-updating
         // Stores the start time of the currently displayed live window (if in live mode)
+        // This will be null if no explicit start time was provided by the user/backend for live mode
         let currentLiveWindowStartTime = null;
 
         /**
@@ -1009,17 +1010,26 @@
 
             // Update time range input fields and flags
             liveEndTimeMode = isLiveModeActive; // Set based on backend's live_mode_active
-            currentLiveWindowStartTime = isLiveModeActive && startTime ? new Date(startTime) : null; // Store the actual start time for live mode
+            // currentLiveWindowStartTime is only set if an explicit start time is provided AND live mode is active
+            // If startTime is null, it means the backend defaulted to a 10-minute sliding window,
+            // so currentLiveWindowStartTime should also be null to allow client-side calculation.
+            currentLiveWindowStartTime = (isLiveModeActive && startTime) ? new Date(startTime) : null;
 
             Object.values(charts).forEach(chart => {
                 if (isLiveModeActive) {
-                    // For live mode, set the X-axis to a dynamic window
                     const now = new Date();
-                    const start = currentLiveWindowStartTime || new Date(now.getTime() - (10 * 60 * 1000)); // Fallback to 10 min if no specific start time
+                    let start;
+                    if (currentLiveWindowStartTime) {
+                        // If a specific start time is provided for live mode (e.g., active run start)
+                        start = currentLiveWindowStartTime;
+                    } else {
+                        // If no specific start time, use a 10-minute sliding window
+                        start = new Date(now.getTime() - (10 * 60 * 1000));
+                    }
                     chart.options.scales.x.min = start;
                     chart.options.scales.x.max = now;
                     console.log(`Chart ${chart.canvas.id} set to live mode: min=${chart.options.scales.x.min.toLocaleTimeString()}, max=${chart.options.scales.x.max.toLocaleTimeString()}`);
-                } else if (startTime && endTime) {
+                } else if (startTime && endTime && endTime !== 'live') { // Ensure endTime is a fixed date, not 'live' string
                     // For fixed historical range, set min/max from provided times
                     chart.options.scales.x.min = new Date(startTime);
                     chart.options.scales.x.max = new Date(endTime);
@@ -1060,6 +1070,8 @@
 
             const now = new Date();
             // Determine minTime based on currentLiveWindowStartTime (if set) or fallback to a 10-minute window
+            // This ensures that "Aktuellen Lauf anzeigen" (which might not have a specific startTime from backend if no active run)
+            // still defaults to a 10-minute window.
             const minTime = currentLiveWindowStartTime ? currentLiveWindowStartTime.getTime() : (now.getTime() - (10 * 60 * 1000));
             console.log(`Current time: ${now.toLocaleTimeString()}, Min time for window: ${new Date(minTime).toLocaleTimeString()}`);
 
@@ -1140,10 +1152,6 @@
                     continue; // Skip if chart not initialized
                 }
 
-                // Update X-axis min/max for the sliding window
-                chart.options.scales.x.max = now;
-                chart.options.scales.x.min = new Date(minTime);
-
                 const mappings = chartDataMappings[chartId];
 
                 for (const mappingType in mappings) {
@@ -1201,11 +1209,15 @@
                         }
                     }
                 }
+                // Update X-axis min/max for the sliding window for each chart
+                // This must be done for each chart individually as their data might differ
+                chart.options.scales.x.max = now;
+                chart.options.scales.x.min = new Date(minTime);
                 chart.update('none'); // Update chart after all datasets for this chart are modified
             }
             applySharedYAxisScale(); // Re-apply shared Y-axis scaling
         }
-
+        
         // Event listener for when the DOM is fully loaded
         document.addEventListener('DOMContentLoaded', () => {
             // Define a consistent color palette for each metric type and its features

@@ -1,20 +1,20 @@
-# IOT_PROJECT/src/iot_app/consumers.py
+# path: src/iot_app/consumers.py
 
 # Websocket
-# Definiert den DashboardConsumer, der für die Handhabung von WebSocket-Verbindungen für ein Echtzeit-Dashboard verantwortlich ist.
-# Dieses Skript ermöglicht die bidirektionale Kommunikation zwischen dem Frontend (Webbrowser) und dem Backend (Django-Anwendung) über WebSockets, um Daten in Echtzeit anzuzeigen und zu aktualisieren.
-# Der DashboardConsumer ist eine zentrale Komponente für die Bereitstellung eines interaktiven und dynamischen Dashboards.
+# Defines the DashboardConsumer, which is responsible for handling WebSocket connections for a real-time dashboard.
+# This script enables bidirectional communication between the frontend (web browser) and the backend (Django application) via WebSockets to display and update data in real time.
+# The DashboardConsumer is a central component for providing an interactive and dynamic dashboard.
 
-import json                                                                                 # Serialisierung und Deserialisierung von Daten im JSON-Format
-from channels.generic.websocket import AsyncWebsocketConsumer                               # grundlegende Struktur und Methoden für die WebSocket-Kommunikation
-from asgiref.sync import sync_to_async                                                      # synchrone Funktionen (wie Django ORM-Aufrufe) sicher in einem asynchronen Kontext auszuführen
+import json                                                                                 # Serialization and deserialization of data in JSON format
+from channels.generic.websocket import AsyncWebsocketConsumer                               # Basic structure and methods for WebSocket communication
+from asgiref.sync import sync_to_async                                                      # To safely execute synchronous functions (like Django ORM calls) in an asynchronous context
 from django.utils import timezone
 from datetime import datetime, timedelta
 import asyncio
 import pytz # Import pytz for explicit timezone handling
 
-from .models import MotorInfo, LiveData, TwinData, MalfunctionLog, RawData, FeatureData, PredictionData # Importiert Django-Modelle, die die IOT-Anwendung definieren
-from .utils import get_dashboard_data, to_serializable_dict                                 # Hilfsfunktionen, die die Logik zum Abrufen und Verarbeiten von Daten aus der Datenbank kapselt
+from .models import MotorInfo, LiveData, TwinData, MalfunctionLog, RawData, FeatureData, PredictionData # Imports Django models that define the IOT application
+from .utils import get_dashboard_data, to_serializable_dict                                 # Helper functions that encapsulate the logic for retrieving and processing data from the database
 from .utils import get_active_run_time_window, get_plot_data, get_latest_plot_data_point    #
 
 class DashboardConsumer(AsyncWebsocketConsumer):
@@ -26,26 +26,39 @@ class DashboardConsumer(AsyncWebsocketConsumer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.live_mode_active = False # Flag to control continuous plot updates
+        # Stores the start time of the currently displayed plot window.
+        # Used to re-request data if a plot_boundary_update occurs in live mode.
+        # This will be None if the current view is a 10-minute sliding window,
+        # or a specific datetime if it's an active run with a fixed start.
+        self.current_plot_start_time = None
+        # Stores the end time of the currently displayed plot window (if fixed).
+        # Not used for live mode where end time is always 'now'.
+        self.current_plot_end_time = None
 
     async def connect(self):
+        """
+        Handles new WebSocket connections.
+        Adds the channel to a group and sends initial data.
+        """
+        self.group_name = "iot_dashboard_group"                                             # Group name for the dashboard
 
-        self.group_name = "iot_dashboard_group"                                             # Group name für das dashboard
-
-        await self.channel_layer.group_add(                                                 # Fügt den aktuellen Kanal des Consumers (die spezifische WebSocket-Verbindung) zur definierten Gruppe hinzu
+        await self.channel_layer.group_add(                                                 # Adds the consumer's current channel (the specific WebSocket connection) to the defined group
             self.group_name,
             self.channel_name
         )
-        await self.accept()                                                                 #  Akzeptiert die eingehende WebSocket-Verbindung. Ohne dies würde die Verbindung geschlossen.
+        await self.accept()                                                                 # Accepts the incoming WebSocket connection. Without this, the connection would be closed.
 
         print(f"WebSocket connected: {self.channel_name} to group {self.group_name}")
 
-        await self.send_current_data()                                                      # Sendet die aktuellen Dashboard-Panel-Daten an den neu verbundenen Client.
-        # On initial load, set live_mode_active to True and request last 10 minutes
-        self.live_mode_active = True
-        # Initial load should show the current run or last 10 minutes live
+        await self.send_current_data()                                                      # Sends the current dashboard panel data to the newly connected client.
+        # On initial load, request the initial live view (current run or last 10 minutes live)
         await self.send_plot_data(plot_type='initial_load_live')
 
     async def disconnect(self, close_code):
+        """
+        Handles WebSocket disconnections.
+        Removes the channel from the group and deactivates live mode.
+        """
         print(f"WebSocket disconnected: {self.channel_name}")
 
         await self.channel_layer.group_discard(
@@ -123,16 +136,23 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         if message_type == "plot_data_point":
             # Send only the latest data point for continuous plots IF live mode is active
             if self.live_mode_active:
+                # When a new point arrives, we need to ensure the client's X-axis is updated
+                # to reflect the sliding window. The client will handle its own x-axis adjustment.
                 await self.send_latest_plot_data_point()
-            else:
-                # print("Skipping plot_data_point: Live mode is not active.") # Uncomment for debugging
-                pass
+            # else:
+            #     print("Skipping plot_data_point: Live mode is not active.") # Uncomment for debugging
         elif message_type == "plot_boundary_update":
             # A new plot boundary has been set, re-send historical data
             # This might be triggered by external events, so re-evaluate live mode
             if self.live_mode_active:
                 print("Received plot_boundary_update in live mode, re-requesting initial live view.")
-                await self.send_plot_data(plot_type='initial_load_live') # Re-send current live view
+                # Re-send the current live view based on the stored start time or default 10 min
+                # If current_plot_start_time is None, send_plot_data will default to 10 min window
+                await self.send_plot_data(
+                    start_time=self.current_plot_start_time,
+                    end_time='live', # Always 'live' for this case
+                    plot_type='initial_load_live' # This type ensures the logic for live window is applied
+                )
             else:
                 print("Received plot_boundary_update, but not in live mode. No action taken.")
                 pass # The frontend will handle re-requesting if needed for fixed ranges
@@ -162,14 +182,9 @@ class DashboardConsumer(AsyncWebsocketConsumer):
     def _get_active_run_time_window(self):
         """
         Wrapper for get_active_run_time_window utility function.
-        Returns the time window of the active run, or the last 10 minutes if no active run.
+        Returns the time window of the active run, or (None, None) if no active run.
         """
-        start_time, end_time = get_active_run_time_window()
-        if not start_time and not end_time:
-            # If no active run is detected, default to the last 10 minutes
-            end_time = timezone.now()
-            start_time = end_time - timedelta(minutes=10)
-        return start_time, end_time
+        return get_active_run_time_window()
 
     @sync_to_async
     def _get_plot_data(self, start_time, end_time):
@@ -199,10 +214,16 @@ class DashboardConsumer(AsyncWebsocketConsumer):
                 current_start_time = active_run_start
                 current_end_time = active_run_end # Will be timezone.now() if run is ongoing
                 print(f"send_plot_data: initial_load_live requested. Using active run window: {current_start_time} - {current_end_time}.")
+                # If using an active run, the start time is fixed to the run's start
+                self.current_plot_start_time = current_start_time
             else:
+                # If no active run, default to last 10 minutes from now
                 current_end_time = timezone.now()
                 current_start_time = current_end_time - timedelta(minutes=10)
                 print(f"send_plot_data: initial_load_live requested. No active run, defaulting to last 10 minutes: {current_start_time} - {current_end_time}.")
+                # For a 10-minute sliding window, the backend doesn't fix the start time,
+                # so we set current_plot_start_time to None to signal the frontend to slide.
+                self.current_plot_start_time = None
 
             is_live_mode_active_for_response = True # Initial load is always live
             self.live_mode_active = True
@@ -211,12 +232,14 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         elif end_time == 'live':
             current_end_time = timezone.now() # End time is always now in live mode
             if current_start_time is None:
-                # If no start_time was provided, default to 10 min window from now
+                # If no start_time was provided by the user, default to 10 min window from now
                 current_start_time = current_end_time - timedelta(minutes=10)
                 print(f"send_plot_data: live end_time requested, no start_time. Setting window to last 10 minutes: {current_start_time} - {current_end_time}. Live mode: TRUE")
+                self.current_plot_start_time = None # Frontend will handle sliding
             else:
                 # Use the provided start_time with current_end_time as now
                 print(f"send_plot_data: live end_time requested with manual start_time. Setting window to {current_start_time} - {current_end_time}. Live mode: TRUE")
+                self.current_plot_start_time = current_start_time # Frontend will use this fixed start
 
             is_live_mode_active_for_response = True
             self.live_mode_active = True
@@ -224,36 +247,54 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         # Case 3: Fixed historical range (both start_time and end_time are specific datetimes)
         else:
             # If no start/end time provided, determine active run or default to last 10 min static
+            # This block should ideally not be reached if initial_load_live is correctly handled,
+            # but serves as a fallback for other 'historical_or_live_range' requests without explicit times.
             if current_start_time is None and current_end_time is None:
-                current_start_time, current_end_time = await self._get_active_run_time_window()
-                # If _get_active_run_time_window returns None, it means no active run and it already
-                # defaults to last 10 minutes, so current_start_time and current_end_time will be set.
-                print(f"send_plot_data: No explicit range, using active run/default 10 min static: {current_start_time} - {current_end_time}. Live mode: FALSE")
+                active_run_start, active_run_end = await self._get_active_run_time_window()
+                if active_run_start and active_run_end:
+                    current_start_time = active_run_start
+                    current_end_time = active_run_end
+                    print(f"send_plot_data: No explicit range, using active run window: {current_start_time} - {current_end_time}. Live mode: FALSE")
+                else:
+                    # If no active run and no explicit range, default to a static last 10 minutes
+                    current_end_time = timezone.now()
+                    current_start_time = current_end_time - timedelta(minutes=10)
+                    print(f"send_plot_data: No explicit range and no active run, defaulting to static last 10 minutes: {current_start_time} - {current_end_time}. Live mode: FALSE")
             else:
                 # This is a manually specified fixed historical range
                 print(f"send_plot_data: Fixed historical range requested: {current_start_time} - {current_end_time}. Live mode: FALSE")
 
             is_live_mode_active_for_response = False
             self.live_mode_active = False
+            self.current_plot_start_time = current_start_time # Store fixed start time
+            self.current_plot_end_time = current_end_time # Store fixed end time
 
         # Ensure all datetime objects are timezone-aware
         if current_start_time and not timezone.is_aware(current_start_time):
             current_start_time = timezone.make_aware(current_start_time)
-        if current_end_time and not timezone.is_aware(current_end_time):
+        if current_end_time and current_end_time != 'live' and not timezone.is_aware(current_end_time):
             current_end_time = timezone.make_aware(current_end_time)
 
-        plot_data = await self._get_plot_data(current_start_time, current_end_time)
+        # The `self.current_plot_start_time` is already set in the logic above
+        # The `self.current_plot_end_time` is only relevant for fixed ranges, and also set above.
+
+        # Fetch data for the determined time window
+        # If current_end_time is 'live', pass timezone.now() to get_plot_data
+        actual_end_time_for_query = current_end_time if current_end_time != 'live' else timezone.now()
+        plot_data = await self._get_plot_data(current_start_time, actual_end_time_for_query)
 
         serializable_plot_data = to_serializable_dict(plot_data)
         await self.send(text_data=json.dumps({
             'type': 'plot_data_update',
             'plot_type': plot_type, # Keep original plot_type for frontend context
             'data': serializable_plot_data,
-            'start_time': current_start_time.isoformat() if current_start_time else None,
-            'end_time': current_end_time.isoformat() if current_end_time else None,
+            # Send current_plot_start_time which might be None for sliding 10-min window
+            'start_time': self.current_plot_start_time.isoformat() if self.current_plot_start_time else None,
+            # Send 'live' string if it's live mode, otherwise the fixed end time
+            'end_time': current_end_time.isoformat() if current_end_time != 'live' and current_end_time else 'live',
             'live_mode_active': is_live_mode_active_for_response, # Inform frontend about live mode status
         }))
-        print(f"Sent plot_data_update: start={current_start_time}, end={current_end_time}, live_mode_active={is_live_mode_active_for_response}")
+        print(f"Sent plot_data_update: start={self.current_plot_start_time}, end={current_end_time}, live_mode_active={is_live_mode_active_for_response}")
 
     async def send_latest_plot_data_point(self):
         """
