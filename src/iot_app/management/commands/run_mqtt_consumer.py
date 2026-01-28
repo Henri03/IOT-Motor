@@ -18,7 +18,22 @@ logger = logging.getLogger(__name__)
 class Command(BaseCommand):
     help = 'Startet einen MQTT-Consumer, um Sensordaten zu empfangen und in der Datenbank zu speichern.'
 
+    # Dictionary zur Speicherung des letzten Anomaliezustands für jede Metrik (für abweichungsbasierte Anomalien)
     last_anomaly_state = {}
+    # Dictionary zur Speicherung von Zählern für aufeinanderfolgende "schlechte" Vorhersagewerte
+    prediction_error_counts = {
+        'temperature': 0,
+        'current': 0,
+        'torque': 0,
+    }
+    # Flag, das anzeigt, ob für eine Metrik derzeit ein FEHLER-Zustand aktiv ist
+    error_active_flags = {
+        'temperature': False,
+        'current': False,
+        'torque': False,
+    }
+    # Schwellenwert für die Anzahl der aufeinanderfolgenden schlechten Vorhersagen, bevor ein FEHLER ausgelöst wird
+    PREDICTION_ERROR_THRESHOLD = 10
 
     def add_arguments(self, parser):
         """
@@ -28,7 +43,7 @@ class Command(BaseCommand):
         parser.add_argument('--port', type=int, default=settings.MQTT_BROKER_PORT, help='MQTT Broker Port')
         parser.add_argument('--topic_live', type=str, default=settings.MQTT_TOPIC_LIVE, help='MQTT Topic für Live-Daten')
         parser.add_argument('--topic_twin', type=str, default=settings.MQTT_TOPIC_TWIN, help='MQTT Topic für Twin-Daten')
-        parser.add_argument('--topic_malfunction_info', type=str, default=settings.MQTT_TOPIC_MALFUNCTION_INFO, help='MQTT Topic für Info-Meldungen')
+        parser.add_argument('--topic_malfunction_info', type=str, default=settings.MQTT_TOPIC_MALFUNCTION_INFO, help='MQTT Topic für Info-Nachrichten')
         parser.add_argument('--topic_malfunction_warning', type=str, default=settings.MQTT_TOPIC_MALFUNCTION_WARNING, help='MQTT Topic für Warnmeldungen')
         parser.add_argument('--topic_malfunction_error', type=str, default=settings.MQTT_TOPIC_MALFUNCTION_ERROR, help='MQTT Topic für Fehlermeldungen')
         parser.add_argument('--deviation_threshold', type=float, default=getattr(settings, 'MQTT_DEVIATION_THRESHOLD_PERCENT', 10.0),
@@ -39,17 +54,17 @@ class Command(BaseCommand):
         parser.add_argument('--topic_raw_current', type=str, default=getattr(settings, 'MQTT_TOPIC_RAW_CURRENT', "raw/current"), help='MQTT Topic für Rohdaten Strom')
         parser.add_argument('--topic_raw_torque', type=str, default=getattr(settings, 'MQTT_TOPIC_RAW_TORQUE', "raw/torque"), help='MQTT Topic für Rohdaten Drehmoment')
 
-        parser.add_argument('--topic_feature_temperature', type=str, default=getattr(settings, 'MQTT_TOPIC_FEATURE_TEMPERATURE', "feature/temperature"), help='MQTT Topic für Feature Temperatur')
-        parser.add_argument('--topic_feature_current', type=str, default=getattr(settings, 'MQTT_TOPIC_FEATURE_CURRENT', "feature/current"), help='MQTT Topic für Feature Strom')
-        parser.add_argument('--topic_feature_torque', type=str, default=getattr(settings, 'MQTT_TOPIC_FEATURE_TORQUE', "feature/torque"), help='MQTT Topic für Feature Drehmoment')
+        parser.add_argument('--topic_feature_temperature', type=str, default=getattr(settings, 'MQTT_TOPIC_FEATURE_TEMPERATURE', "feature/temperature"), help='MQTT Topic für Feature-Daten Temperatur')
+        parser.add_argument('--topic_feature_current', type=str, default=getattr(settings, 'MQTT_TOPIC_FEATURE_CURRENT', "feature/current"), help='MQTT Topic für Feature-Daten Strom')
+        parser.add_argument('--topic_feature_torque', type=str, default=getattr(settings, 'MQTT_TOPIC_FEATURE_TORQUE', "feature/torque"), help='MQTT Topic für Feature-Daten Drehmoment')
 
-        parser.add_argument('--topic_prediction_temperature', type=str, default=getattr(settings, 'MQTT_TOPIC_PREDICTION_TEMPERATURE', "prediction/temperature"), help='MQTT Topic für Vorhersage Temperatur')
-        parser.add_argument('--topic_prediction_current', type=str, default=getattr(settings, 'MQTT_TOPIC_PREDICTION_CURRENT', "prediction/current"), help='MQTT Topic für Vorhersage Strom')
-        parser.add_argument('--topic_prediction_torque', type=str, default=getattr(settings, 'MQTT_TOPIC_PREDICTION_TORQUE', "prediction/torque"), help='MQTT Topic für Vorhersage Drehmoment')
+        parser.add_argument('--topic_prediction_temperature', type=str, default=getattr(settings, 'MQTT_TOPIC_PREDICTION_TEMPERATURE', "prediction/temperature"), help='MQTT Topic für Vorhersage-Daten Temperatur')
+        parser.add_argument('--topic_prediction_current', type=str, default=getattr(settings, 'MQTT_TOPIC_PREDICTION_CURRENT', "prediction/current"), help='MQTT Topic für Vorhersage-Daten Strom')
+        parser.add_argument('--topic_prediction_torque', type=str, default=getattr(settings, 'MQTT_TOPIC_PREDICTION_TORQUE', "prediction/torque"), help='MQTT Topic für Vorhersage-Daten Drehmoment')
 
     def handle(self, *args, **options):
         """
-        Die Hauptmethode, die beim Ausführen des Management-Befehls aufgerufen wird.
+        Die Hauptmethode, die ausgeführt wird, wenn der Management-Befehl aufgerufen wird.
         Initialisiert den MQTT-Client und startet die Verbindung.
         """
         self.broker_address = options['broker']
@@ -78,21 +93,23 @@ class Command(BaseCommand):
         metrics_to_compare = ['current', 'temp', 'torque']
         for metric_name in metrics_to_compare:
             self.last_anomaly_state[metric_name] = False
+            # Initialisiert das Fehler-Aktiv-Flag für Vorhersagen
+            self.error_active_flags[metric_name] = False 
 
         self.stdout.write(self.style.SUCCESS(f"Starte MQTT-Consumer für den Motor"))
         self.stdout.write(self.style.SUCCESS(f"Verbinde mit MQTT-Broker: {self.broker_address}:{self.port}"))
         self.stdout.write(self.style.SUCCESS(f"Abonniere Live-Daten-Topic: {self.topic_live}"))
         self.stdout.write(self.style.SUCCESS(f"Abonniere Twin-Daten-Topic: {self.topic_twin}"))
-        self.stdout.write(self.style.SUCCESS(f"Abonniere Malfunction-Info-Topic: {self.topic_malfunction_info}"))
-        self.stdout.write(self.style.SUCCESS(f"Abonniere Malfunction-Warning-Topic: {self.topic_malfunction_warning}"))
-        self.stdout.write(self.style.SUCCESS(f"Abonniere Malfunction-Error-Topic: {self.topic_malfunction_error}"))
+        self.stdout.write(self.style.SUCCESS(f"Abonniere Störungsinformationen-Topic: {self.topic_malfunction_info}"))
+        self.stdout.write(self.style.SUCCESS(f"Abonniere Störungswarnung-Topic: {self.topic_malfunction_warning}"))
+        self.stdout.write(self.style.SUCCESS(f"Abonniere Störungsfehler-Topic: {self.topic_malfunction_error}"))
 
         self.stdout.write(self.style.SUCCESS(f"Abonniere Rohdaten-Topics: {self.topic_raw_temperature}, {self.topic_raw_current}, {self.topic_raw_torque}"))
         self.stdout.write(self.style.SUCCESS(f"Abonniere Feature-Topics: {self.topic_feature_temperature}, {self.topic_feature_current}, {self.topic_feature_torque}"))
         self.stdout.write(self.style.SUCCESS(f"Abonniere Vorhersage-Topics: {self.topic_prediction_temperature}, {self.topic_prediction_current}, {self.topic_prediction_torque}"))
 
         self.stdout.write(self.style.SUCCESS(f"Abweichungsschwellenwert für Warnungen: {self.deviation_threshold}%"))
-        self.stdout.write(self.style.SUCCESS(f"Datenaktualitäts-Schwellenwert: {self.data_freshness_threshold} Sekunden"))
+        self.stdout.write(self.style.SUCCESS(f"Datensatz-Frische-Schwellenwert: {self.data_freshness_threshold} Sekunden"))
 
         client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         client.on_connect = async_to_sync(self._on_connect_async)
@@ -106,7 +123,7 @@ class Command(BaseCommand):
             client.loop_forever()
         except Exception as e:
             self.stderr.write(self.style.ERROR(f"MQTT-Verbindungsfehler: {e}"))
-            self.stderr.write(self.style.ERROR("Stellen Sie sicher, dass der MQTT-Broker (Mosquitto) läuft und erreichbar ist."))
+            self.stderr.write(self.style.ERROR("Bitte stellen Sie sicher, dass der MQTT-Broker (Mosquitto) läuft und erreichbar ist."))
 
     async def _on_connect_async(self, client, userdata, flags, rc, properties):
         """
@@ -115,7 +132,7 @@ class Command(BaseCommand):
         """
         command_instance = userdata['command_instance']
         if rc == 0:
-            command_instance.stdout.write(command_instance.style.SUCCESS("Verbunden mit MQTT Broker!"))
+            command_instance.stdout.write(command_instance.style.SUCCESS("Verbunden mit MQTT-Broker!"))
             client.subscribe(command_instance.topic_live)
             client.subscribe(command_instance.topic_twin)
             client.subscribe(command_instance.topic_malfunction_info)
@@ -141,16 +158,16 @@ class Command(BaseCommand):
         """
         command_instance = userdata['command_instance']
 
-        # Zentrales Logging für empfangene Nachrichten
+        # Zentralisierte Protokollierung für empfangene Nachrichten
         command_instance.stdout.write(f"Empfangen auf Topic: {msg.topic}, Payload: {msg.payload.decode()}")
 
         try:
             payload = json.loads(msg.payload.decode())
-            logger.debug(f"Nachricht auf Topic {msg.topic} empfangen: {payload}")
+            logger.debug(f"Nachricht empfangen auf Topic {msg.topic}: {payload}")
 
             motor = await sync_to_async(MotorInfo.objects.first)()
             if not motor:
-                command_instance.stderr.write(command_instance.style.ERROR("Kein Motor in der Datenbank gefunden. Bitte im Admin-Bereich erstellen."))
+                command_instance.stderr.write(command_instance.style.ERROR("Kein Motor in der Datenbank gefunden. Bitte erstellen Sie einen im Admin-Bereich."))
                 return
 
             # --- Topic-basierte Nachrichtenverarbeitung ---
@@ -186,15 +203,15 @@ class Command(BaseCommand):
                 command_instance.stdout.write(f"INFO: Unbekanntes Topic empfangen: {msg.topic}")
 
             # WICHTIG: _process_and_notify_dashboard() und _notify_dashboard_for_plot_data_point()
-            # werden jetzt in den einzelnen _handle_... Methoden aufgerufen,
+            # werden jetzt innerhalb der einzelnen _handle_... Methoden aufgerufen,
             # um sicherzustellen, dass sowohl Plots als auch Panel-Daten
-            # bei jedem relevanten Datenpunkt aktualisiert werden.
+            # mit jedem relevanten Datenpunkt aktualisiert werden.
             # Der Aufruf hier ist redundant und wird entfernt.
 
         except json.JSONDecodeError:
             command_instance.stderr.write(command_instance.style.ERROR(f"Fehler beim Dekodieren von JSON aus der Nachricht: {msg.payload} auf Topic {msg.topic}"))
         except Exception as e:
-            command_instance.stderr.write(command_instance.style.ERROR(f"Ein unerwarteter Fehler bei der Verarbeitung der MQTT-Nachricht auf Topic {msg.topic}: {e}"))
+            command_instance.stderr.write(command_instance.style.ERROR(f"Ein unerwarteter Fehler ist bei der Verarbeitung der MQTT-Nachricht auf Topic {msg.topic} aufgetreten: {e}"))
             traceback.print_exc()
 
     async def _handle_live_data(self, topic, payload):
@@ -202,11 +219,11 @@ class Command(BaseCommand):
         Verarbeitet Nachrichten vom Live-Daten-Topic.
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
-        self.stdout.write(f"Handling Live Data: Topic={topic}, Payload={payload}")
+        self.stdout.write(f"Verarbeite Live-Daten: Topic={topic}, Payload={payload}")
         await self._save_live_data(payload)
         logger.debug(f"Live-Daten gespeichert.")
         await self._notify_dashboard_for_plot_data_point() # Benachrichtigt für Plots
-        # LiveData ist die Hauptquelle für Panel-Werte, daher Panel-Update triggern
+        # LiveData ist die Hauptquelle für Panel-Werte, daher Panel-Update auslösen
         await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
 
     async def _handle_twin_data(self, topic, payload):
@@ -214,24 +231,24 @@ class Command(BaseCommand):
         Verarbeitet Nachrichten vom Twin-Daten-Topic.
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
-        self.stdout.write(f"Handling Twin Data: Topic={topic}, Payload={payload}")
+        self.stdout.write(f"Verarbeite Twin-Daten: Topic={topic}, Payload={payload}")
         await self._save_twin_data(payload)
         logger.debug(f"Twin-Daten gespeichert.")
         await self._notify_dashboard_for_plot_data_point() # Benachrichtigt für Plots
-        # TwinData ist wichtig für Panel-Vergleiche, daher Panel-Update triggern
+        # TwinData ist wichtig für Panel-Vergleiche, daher Panel-Update auslösen
         await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
 
     async def _handle_malfunction_data(self, topic, payload, topic_type):
         """
-        Verarbeitet Nachrichten von den Malfunction-Topics (Info, Warning, Error).
-        Speichert die Daten im MalfunctionLog und benachrichtigt das Dashboard über eine Änderung im Anomaly-Status.
+        Verarbeitet Nachrichten von den Störungs-Topics (Info, Warnung, Fehler).
+        Speichert die Daten im MalfunctionLog und benachrichtigt das Dashboard über eine Änderung des Anomalie-Status.
         """
-        self.stdout.write(f"Handling Malfunction Data ({topic_type}): Topic={topic}, Payload={payload}")
+        self.stdout.write(f"Verarbeite Störungsdaten ({topic_type}): Topic={topic}, Payload={payload}")
         if 'message_type' not in payload:
             payload['message_type'] = topic_type
         await self._save_malfunction_log(payload)
         logger.warning(f"Störungsprotokoll ({topic_type}) gespeichert: {payload.get('description')}")
-        # Malfunction logs beeinflussen den Anomaly-Status und die Log-Anzeige, daher Panel-Update triggern
+        # Störungsprotokolle beeinflussen den Anomalie-Status und die Protokollanzeige, daher Panel-Update auslösen
         await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
 
     async def _handle_raw_data(self, topic, payload, metric_type):
@@ -239,11 +256,11 @@ class Command(BaseCommand):
         Verarbeitet Nachrichten von den Rohdaten-Topics.
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
-        self.stdout.write(f"Handling Raw Data ({metric_type}): Topic={topic}, Payload={payload}")
+        self.stdout.write(f"Verarbeite Rohdaten ({metric_type}): Topic={topic}, Payload={payload}")
         await self._save_raw_data(payload, metric_type)
         logger.debug(f"Rohdaten für {metric_type} empfangen und gespeichert: {payload}.")
         await self._notify_dashboard_for_plot_data_point() # Benachrichtigt für Plots
-        # Rohdaten beeinflussen die Panel-Anzeige des realen Motors, daher Panel-Update triggern
+        # Rohdaten beeinflussen die Panel-Anzeige des realen Motors, daher Panel-Update auslösen
         await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
 
     async def _handle_feature_data(self, topic, payload, metric_type):
@@ -251,29 +268,84 @@ class Command(BaseCommand):
         Verarbeitet Nachrichten von den Feature-Topics.
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
-        self.stdout.write(f"Handling Feature Data ({metric_type}): Topic={topic}, Payload={payload}")
+        self.stdout.write(f"Verarbeite Feature-Daten ({metric_type}): Topic={topic}, Payload={payload}")
         await self._save_feature_data(payload, metric_type)
         logger.debug(f"Feature-Daten für {metric_type} empfangen und gespeichert: {payload}.")
         await self._notify_dashboard_for_plot_data_point() # Benachrichtigt für Plots
-        # Feature-Daten können die Anomalie-Erkennung beeinflussen (wenn diese Features nutzt), daher Panel-Update triggern
+        # Feature-Daten können die Anomalieerkennung beeinflussen (wenn sie diese Features verwendet), daher Panel-Update auslösen
         await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
 
     async def _handle_prediction_data(self, topic, payload, metric_type):
         """
         Verarbeitet Nachrichten von den Vorhersage-Topics.
-        Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
+        Speichert die Daten und löst bei Bedarf Warnungen/Fehler basierend auf dem Vorhersagewert aus.
         """
-        self.stdout.write(f"Handling Prediction Data ({metric_type}): Topic={topic}, Payload={payload}")
+        self.stdout.write(f"Verarbeite Vorhersage-Daten ({metric_type}): Topic={topic}, Payload={payload}")
+        prediction_value = payload.get('value')
+
+        # Extrahiere Zeitstempel für MalfunctionLog oder verwende aktuelle Zeit
+        # Sicherstellen, dass make_aware_from_iso nur mit einem String aufgerufen wird
+        timestamp_str = payload.get('timestamp')
+        log_timestamp = make_aware_from_iso(timestamp_str) if isinstance(timestamp_str, str) else timezone.now()
+
+        if prediction_value == -1:
+            # Wenn bereits ein FEHLER für diese Metrik aktiv ist, keinen weiteren FEHLER protokollieren
+            if self.error_active_flags[metric_type]:
+                logger.debug(f"FEHLER für {metric_type.capitalize()} ist bereits aktiv. Überspringe neues FEHLER-Protokoll.")
+            else:
+                self.prediction_error_counts[metric_type] += 1
+                if self.prediction_error_counts[metric_type] >= self.PREDICTION_ERROR_THRESHOLD:
+                    # Fehler nach Erreichen des Schwellenwerts
+                    description = f"{metric_type.capitalize()}-Vorhersage ist schlecht (-1) {self.PREDICTION_ERROR_THRESHOLD} Mal in Folge."
+                    await self._save_malfunction_log({
+                        'message_type': 'ERROR',
+                        'description': description,
+                        'motor_state': 'fehlerhaft',
+                        'emergency_stop_active': True,
+                        'timestamp': log_timestamp
+                    })
+                    self.stdout.write(self.style.ERROR(description))
+                    self.error_active_flags[metric_type] = True # Fehler als aktiv setzen
+                    self.prediction_error_counts[metric_type] = 0 # Zähler nach Auslösen des FEHLERS zurücksetzen
+                else:
+                    # Warnung für jeden schlechten Vorhersagewert, bevor der Schwellenwert erreicht ist
+                    description = f"{metric_type.capitalize()}-Vorhersage ist schlecht (-1). Aufeinanderfolgende schlechte Vorhersagen: {self.prediction_error_counts[metric_type]}/{self.PREDICTION_ERROR_THRESHOLD}."
+                    await self._save_malfunction_log({
+                        'message_type': 'WARNING',
+                        'description': description,
+                        'motor_state': 'potenziell fehlerhaft',
+                        'emergency_stop_active': False,
+                        'timestamp': log_timestamp
+                    })
+                    self.stdout.write(self.style.WARNING(description))
+        else:
+            # Wenn der Vorhersagewert nicht -1 ist, prüfen, ob eine INFO-Nachricht protokolliert und Zustände zurückgesetzt werden müssen
+            # Eine INFO-Nachricht soll nur gesendet werden, wenn zuvor ein Fehler oder eine Warnung aktiv war
+            if self.prediction_error_counts[metric_type] > 0 or self.error_active_flags[metric_type]:
+                # Wenn ein Fehler oder eine Warnung behoben wurde, soll das Anomaliefeld wieder "Motor läuft normal" anzeigen
+                description = f"INFO: {metric_type.capitalize()}-Anomalie behoben. Vorhersage ist wieder normal."
+
+                await self._save_malfunction_log({
+                    'message_type': 'INFO',
+                    'description': description,
+                    'motor_state': 'normal', # Setze den Motorzustand auf 'normal'
+                    'emergency_stop_active': False,
+                    'timestamp': log_timestamp
+                })
+                self.stdout.write(self.style.NOTICE(description))
+            self.prediction_error_counts[metric_type] = 0
+            self.error_active_flags[metric_type] = False # Aktives Fehler-Flag löschen
+
         await self._save_prediction_data(payload, metric_type)
-        logger.debug(f"Vorhersagedaten für {metric_type} empfangen und gespeichert: {payload}.")
+        logger.debug(f"Vorhersage-Daten für {metric_type} empfangen und gespeichert: {payload}.")
         await self._notify_dashboard_for_plot_data_point() # Benachrichtigt für Plots
-        # Vorhersagedaten beeinflussen die Anomalie-Erkennung und die Plot-Darstellung, daher Panel-Update triggern
+        # Vorhersage-Daten beeinflussen die Anomalieerkennung und Plot-Anzeige, daher Panel-Update auslösen
         await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
 
     async def _notify_dashboard_for_plot_data_point(self):
         """
         Asynchrone Hilfsfunktion zum Senden einer Nachricht an die Dashboard-Gruppe
-        über den Channels Layer, um einen neuen Plot-Datenpunkt zu signalisieren.
+        über die Channels-Schicht, die einen neuen Plot-Datenpunkt signalisiert.
         """
         channel_layer = get_channel_layer()
         if channel_layer:
@@ -285,22 +357,22 @@ class Command(BaseCommand):
                     "data": {}
                 }
             )
-            logger.debug("Sent plot_data_point notification to channel layer.")
+            logger.debug("Plot_data_point-Benachrichtigung an Channel-Schicht gesendet.")
         else:
-            logger.warning("Channel layer not available for plot_data_point notification.")
+            logger.warning("Channel-Schicht nicht verfügbar für plot_data_point-Benachrichtigung.")
 
     async def _process_and_notify_dashboard(self, deviation_threshold, last_anomaly_state):
         """
-        Ruft die neuesten Dashboard-relevanten Daten ab, führt Anomalie-Erkennung durch,
+        Ruft die neuesten Dashboard-relevanten Daten ab, führt eine Anomalieerkennung durch,
         erstellt bei Bedarf MalfunctionLogs und sendet ein umfassendes Update
-        an alle verbundenen Dashboard-Clients über den Channels Layer.
+        an alle verbundenen Dashboard-Clients über die Channels-Schicht.
         """
         channel_layer = get_channel_layer()
         if not channel_layer:
-            logger.warning("Channel layer nicht verfügbar, Dashboard-Update übersprungen.")
+            logger.warning("Channel-Schicht nicht verfügbar, Dashboard-Update übersprungen.")
             return
 
-        # Kleine Verzögerung, um sicherzustellen, dass Daten in der DB sind und um den Event-Loop nicht zu überlasten
+        # Kleine Verzögerung, um sicherzustellen, dass die Daten in der DB sind und um eine Überlastung der Ereignisschleife zu vermeiden
         await asyncio.sleep(0.05)
 
         motor = await sync_to_async(MotorInfo.objects.first)()
@@ -340,8 +412,11 @@ class Command(BaseCommand):
                 return (timezone.now() - data_object.timestamp).total_seconds() < threshold_seconds
             return False
 
-        latest_malfunction_logs_for_display = await sync_to_async(list)(
-            MalfunctionLog.objects.order_by('-timestamp')[:5].values()
+        # Nur unbestätigte Warnungen/Fehler für die Anzeige im Dashboard abrufen
+        latest_unacknowledged_malfunction_logs = await sync_to_async(list)(
+            MalfunctionLog.objects.filter(acknowledged=False)
+            .exclude(message_type='INFO') # INFO-Nachrichten nicht anzeigen
+            .order_by('-timestamp')[:5].values()
         )
 
         real_motor_data = {
@@ -389,27 +464,34 @@ class Command(BaseCommand):
                 'timestamp': getattr(data, 'timestamp', None)
             } for metric, data in latest_prediction_data.items()
         }
+
+        # Initialisiere den Anomalie-Status und die Nachricht
         current_anomaly_detected = False
         current_anomaly_message = "Motor läuft normal."
+        
+        # Flags, um festzuhalten, ob eine Anomalie eines bestimmten Typs aktiv ist
+        deviation_anomaly_active = False
+        prediction_anomaly_active = False
 
-        metrics_to_compare = ['current', 'temp', 'torque']
-
+        metrics_to_compare = ['current', 'temperature', 'torque'] # 'temp' in TwinData, 'temperature' in RawData/PredictionData
         logs_to_create = []
 
+        # --- 1. Überprüfen auf unzureichende oder veraltete Daten (höchste Priorität, da keine Erkennung möglich) ---
         if not latest_raw_data['current'] or not latest_raw_data['temperature'] or not latest_raw_data['torque'] or not latest_twin_data or \
             not is_data_fresh(latest_raw_data['current'], self.data_freshness_threshold) or \
             not is_data_fresh(latest_raw_data['temperature'], self.data_freshness_threshold) or \
             not is_data_fresh(latest_raw_data['torque'], self.data_freshness_threshold) or \
             not is_data_fresh(latest_twin_data, self.data_freshness_threshold):
-            current_anomaly_message = "Keine ausreichenden oder aktuellen Daten für Anomalie-Erkennung verfügbar."
             current_anomaly_detected = True
-
+            current_anomaly_message = "Unzureichende oder veraltete Daten für die Anomalieerkennung verfügbar."
         else:
+            # --- 2. Abweichungsbasierte Anomalieerkennung ---
             for metric_name in metrics_to_compare:
                 raw_data_obj = latest_raw_data.get(metric_name)
+                # 'temp' ist der Attributname in TwinData für Temperatur
+                twin_metric_attr = 'temp' if metric_name == 'temperature' else metric_name
+                twin_value = getattr(latest_twin_data, twin_metric_attr, None)
                 raw_value = raw_data_obj.value if raw_data_obj else None
-
-                twin_value = getattr(latest_twin_data, metric_name, None)
 
                 is_currently_deviating = False
                 if raw_value is not None and twin_value is not None:
@@ -417,54 +499,92 @@ class Command(BaseCommand):
                         deviation = abs((raw_value - twin_value) / twin_value) * 100
                         if deviation > deviation_threshold:
                             is_currently_deviating = True
-                            current_anomaly_detected = True
-                            if "KRITISCHE STÖRUNG" not in current_anomaly_message:
-                                current_anomaly_message = f"WARNUNG: {metric_name.capitalize()}-Abweichung erkannt."
-                    elif raw_value != 0 and twin_value == 0:
+                    elif raw_value != 0 and twin_value == 0: # Sonderfall: Twin ist 0, Raw ist nicht
                         is_currently_deviating = True
-                        current_anomaly_detected = True
-                        if "KRITISCHE STÖRUNG" not in current_anomaly_message:
-                            current_anomaly_message = f"WARNUNG: {metric_name.capitalize()}-Abweichung: Twin ist 0, Raw ist {raw_value:.2f}."
-
-                if is_currently_deviating and not last_anomaly_state.get(metric_name, False):
-                    logs_to_create.append({
-                        'message_type': 'WARNING',
-                        'description': f"{metric_name.capitalize()}-Abweichung > {deviation_threshold:.1f}% erkannt (Raw: {raw_value:.2f}, Twin: {twin_value:.2f})",
-                        'motor_state': 'unbekannt',
-                        'emergency_stop_active': False
-                    })
-                    last_anomaly_state[metric_name] = True
+                
+                if is_currently_deviating:
+                    deviation_anomaly_active = True
+                    if not last_anomaly_state.get(metric_name, False):
+                        logs_to_create.append({
+                            'message_type': 'WARNING',
+                            'description': f"{metric_name.capitalize()}-Abweichung > {deviation_threshold:.1f}% erkannt (Raw: {raw_value:.2f}, Twin: {twin_value:.2f})",
+                            'motor_state': 'unbekannt',
+                            'emergency_stop_active': False,
+                            'timestamp': timezone.now()
+                        })
+                        last_anomaly_state[metric_name] = True
                 elif not is_currently_deviating and last_anomaly_state.get(metric_name, False):
+                    # Wenn Abweichung behoben, logge INFO und setze Zustand zurück
                     logs_to_create.append({
                         'message_type': 'INFO',
-                        'description': f"{metric_name.capitalize()}-Abweichung hat sich behoben. Motor läuft wieder normal.",
+                        'description': f"{metric_name.capitalize()}-Abweichung behoben. Motor läuft normal.",
                         'motor_state': 'normal',
-                        'emergency_stop_active': False
+                        'emergency_stop_active': False,
+                        'timestamp': timezone.now()
                     })
                     last_anomaly_state[metric_name] = False
 
-            for log_data in logs_to_create:
-                await sync_to_async(MalfunctionLog.objects.create)(**log_data)
+            # --- 3. Überprüfen auf aktive Vorhersagefehler (self.error_active_flags und self.prediction_error_counts) ---
+            # Eine Vorhersage-Anomalie ist aktiv, wenn ein error_active_flag gesetzt ist ODER
+            # wenn ein prediction_error_count > 0 ist, was eine laufende Warnung bedeutet
+            if any(self.error_active_flags.values()) or any(count > 0 for count in self.prediction_error_counts.values()):
+                prediction_anomaly_active = True
 
-            unacknowledged_error_logs = await sync_to_async(list)(MalfunctionLog.objects.filter(
-                timestamp__gte=timezone.now() - timezone.timedelta(minutes=5),
-                message_type='ERROR',
-                acknowledged=False
-            ).order_by('-timestamp').values())
+            # --- 4. Überprüfen auf unbestätigte Fehler- oder Warnmeldungen aus MalfunctionLog ---
+            # Wir suchen nach den neuesten, unbestätigten ERROR- oder WARNING-Logs,
+            # die NICHT von der Vorhersage stammen oder deren Ursache noch aktiv ist.
+            
+            # Zuerst alle unquittierten ERRORs und WARNINGs holen
+            unacknowledged_errors_warnings = await sync_to_async(list)(
+                MalfunctionLog.objects.filter(
+                    acknowledged=False,
+                    message_type__in=['ERROR', 'WARNING']
+                ).order_by('-timestamp')
+            )
 
-            if unacknowledged_error_logs:
+            # Filtern, welche dieser Meldungen die Anomalie-Nachricht blockieren sollen
+            # Eine Vorhersage-Warnung/Fehler wird ignoriert, wenn prediction_anomaly_active False ist.
+            active_malfunction_log_message = None
+            for log_entry in unacknowledged_errors_warnings:
+                # Prüfen, ob es sich um eine Vorhersage-Anomalie handelt
+                is_prediction_related = "Vorhersage ist schlecht" in log_entry.description or \
+                                        "Vorhersage ist wieder normal" in log_entry.description # INFO-Meldungen werden eh ausgeschlossen
+
+                if is_prediction_related:
+                    # Wenn die Vorhersage-Anomalie technisch behoben ist (prediction_anomaly_active ist False),
+                    # dann ignorieren wir diese spezifische MalfunctionLog-Meldung für das Haupt-Anomalie-Feld.
+                    if not prediction_anomaly_active:
+                        continue # Diese Meldung blockiert den "Motor läuft normal"-Status nicht
+                
+                # Wenn es keine Vorhersage-Anomalie ist ODER die Vorhersage-Anomalie noch aktiv ist,
+                # dann ist dies eine relevante Meldung.
+                active_malfunction_log_message = log_entry
+                break # Die neueste relevante Meldung reicht
+
+            # --- 5. Finaler Anomalie-Status und Nachricht basierend auf Priorität ---
+            if current_anomaly_message == "Unzureichende oder veraltete Daten für die Anomalieerkennung verfügbar.":
+                # Wenn Daten veraltet sind, bleibt diese Nachricht.
+                pass
+            elif active_malfunction_log_message:
                 current_anomaly_detected = True
-                current_anomaly_message = f"KRITISCHE STÖRUNG: {unacknowledged_error_logs[0]['description']}"
+                if active_malfunction_log_message.message_type == 'ERROR':
+                    current_anomaly_message = f"KRITISCHE STÖRUNG: {active_malfunction_log_message.description}"
+                else: # WARNING
+                    current_anomaly_message = f"WARNUNG: {active_malfunction_log_message.description}"
+            elif deviation_anomaly_active:
+                current_anomaly_detected = True
+                current_anomaly_message = "WARNUNG: Abweichung zwischen Live- und Twin-Daten erkannt."
+            elif prediction_anomaly_active: # Dies wird nur erreicht, wenn active_malfunction_log_message keine aktive Vorhersage-Meldung war (z.B. weil sie behoben wurde)
+                current_anomaly_detected = True
+                current_anomaly_message = "WARNUNG: Vorhersage-Anomalie erkannt."
+            # Wenn keine der oben genannten Anomalien aktiv ist, ist der Motor normal
             else:
-                unacknowledged_warning_logs = await sync_to_async(list)(MalfunctionLog.objects.filter(
-                    timestamp__gte=timezone.now() - timezone.timedelta(minutes=5),
-                    message_type='WARNING',
-                    acknowledged=False
-                ).order_by('-timestamp').values())
+                current_anomaly_detected = False # Explizit auf False setzen
+                current_anomaly_message = "Motor läuft normal."
 
-                if unacknowledged_warning_logs:
-                    current_anomaly_detected = True
-                    current_anomaly_message = f"WARNUNG: {unacknowledged_warning_logs[0]['description']}"
+        # Speichere alle gesammelten Logs
+        for log_data in logs_to_create:
+            await sync_to_async(MalfunctionLog.objects.create)(**log_data)
 
         rounded_real_motor_data = _round_numeric_values_for_display(real_motor_data, decimal_places=2)
         rounded_digital_twin_data = _round_numeric_values_for_display(digital_twin_data, decimal_places=2)
@@ -479,7 +599,7 @@ class Command(BaseCommand):
                 'detected': current_anomaly_detected,
                 'message': current_anomaly_message
             },
-            'malfunction_logs': latest_malfunction_logs_for_display,
+            'malfunction_logs': latest_unacknowledged_malfunction_logs, # Nur unquittierte Logs
             'raw_data': rounded_dashboard_raw_data,
             'feature_data': rounded_dashboard_feature_data,
             'prediction_data': rounded_dashboard_prediction_data,
@@ -496,18 +616,20 @@ class Command(BaseCommand):
                     'data': serializable_message_data
                 }
             )
-            logger.debug("Sent dashboard_update to channel layer.")
+            logger.debug("Dashboard-Update an Channel-Schicht gesendet.")
         except Exception as e:
-            logger.error(f"Fehler beim Senden des Dashboard-Updates an Channel Layer: {e}")
+            logger.error(f"Fehler beim Senden des Dashboard-Updates an die Channel-Schicht: {e}")
             traceback.print_exc()
 
     @sync_to_async
     def _save_live_data(self, payload):
         """
         Speichert Live-Daten in der Datenbank.
-        Uses payload timestamp if available and makes it timezone-aware, otherwise uses timezone.now().
+        Verwendet den Zeitstempel der Payload, falls verfügbar, und macht ihn zeitzonenbewusst,
+        andernfalls wird timezone.now() verwendet.
         """
-        timestamp = make_aware_from_iso(payload.get('timestamp')) if 'timestamp' in payload else timezone.now()
+        timestamp_str = payload.get('timestamp')
+        timestamp = make_aware_from_iso(timestamp_str) if isinstance(timestamp_str, str) else timezone.now()
         LiveData.objects.create(
             timestamp=timestamp,
             current=payload.get('current'),
@@ -523,9 +645,11 @@ class Command(BaseCommand):
     def _save_twin_data(self, payload):
         """
         Speichert Twin-Daten in der Datenbank.
-        Uses payload timestamp if available and makes it timezone-aware, otherwise uses timezone.now().
+        Verwendet den Zeitstempel der Payload, falls verfügbar, und macht ihn zeitzonenbewusst,
+        andernfalls wird timezone.now() verwendet.
         """
-        timestamp = make_aware_from_iso(payload.get('timestamp')) if 'timestamp' in payload else timezone.now()
+        timestamp_str = payload.get('timestamp')
+        timestamp = make_aware_from_iso(timestamp_str) if isinstance(timestamp_str, str) else timezone.now()
         TwinData.objects.create(
             timestamp=timestamp,
             current=payload.get('current'),
@@ -540,15 +664,17 @@ class Command(BaseCommand):
     @sync_to_async
     def _save_malfunction_log(self, payload):
         """
-        Speichert eine Störmeldung (Info, Warning, Error) in der Datenbank.
-        Uses payload timestamp if available and makes it timezone-aware, otherwise uses timezone.now().
+        Speichert eine Störungsmeldung (Info, Warnung, Fehler) in der Datenbank.
+        Verwendet den Zeitstempel der Payload, falls verfügbar, und macht ihn zeitzonenbewusst,
+        andernfalls wird timezone.now() verwendet.
         """
-        timestamp = make_aware_from_iso(payload.get('timestamp')) if 'timestamp' in payload else timezone.now()
+        timestamp_str = payload.get('timestamp')
+        timestamp = make_aware_from_iso(timestamp_str) if isinstance(timestamp_str, str) else timezone.now()
         MalfunctionLog.objects.create(
             timestamp=timestamp,
             message_type=payload.get('message_type'),
             description=payload.get('description'),
-            motor_state=payload.get('motor_state', 'unbekannt'),
+            motor_state=payload.get('motor_state', 'unknown'),
             emergency_stop_active=payload.get('emergency_stop_active', False),
         )
 
@@ -556,9 +682,10 @@ class Command(BaseCommand):
     def _save_raw_data(self, payload, metric_type):
         """
         Speichert Rohdaten in der Datenbank.
-        Macht den Timestamp timezone-aware.
+        Macht den Zeitstempel zeitzonenbewusst.
         """
-        timestamp = make_aware_from_iso(payload.get('timestamp'))
+        timestamp_str = payload.get('timestamp')
+        timestamp = make_aware_from_iso(timestamp_str) if isinstance(timestamp_str, str) else timezone.now()
         RawData.objects.create(
             timestamp=timestamp,
             metric_type=metric_type,
@@ -569,9 +696,10 @@ class Command(BaseCommand):
     def _save_feature_data(self, payload, metric_type):
         """
         Speichert Feature-Daten in der Datenbank.
-        Macht den Timestamp timezone-aware.
+        Macht den Zeitstempel zeitzonenbewusst.
         """
-        timestamp = make_aware_from_iso(payload.get('timestamp'))
+        timestamp_str = payload.get('timestamp')
+        timestamp = make_aware_from_iso(timestamp_str) if isinstance(timestamp_str, str) else timezone.now()
         FeatureData.objects.create(
             timestamp=timestamp,
             metric_type=metric_type,
@@ -586,10 +714,11 @@ class Command(BaseCommand):
     @sync_to_async
     def _save_prediction_data(self, payload, metric_type):
         """
-        Speichert Vorhersagedaten in der Datenbank.
-        Macht den Timestamp timezone-aware.
+        Speichert Vorhersage-Daten in der Datenbank.
+        Macht den Zeitstempel zeitzonenbewusst.
         """
-        timestamp = make_aware_from_iso(payload.get('timestamp'))
+        timestamp_str = payload.get('timestamp')
+        timestamp = make_aware_from_iso(timestamp_str) if isinstance(timestamp_str, str) else timezone.now()
         PredictionData.objects.create(
             timestamp=timestamp,
             metric_type=metric_type,
@@ -599,8 +728,8 @@ class Command(BaseCommand):
 # Globale Hilfsfunktion für die Serialisierung
 def _to_serializable_dict(obj):
     """
-    Rekursive Hilfsfunktion, die datetime-Objekte in einem Dictionary/einer Liste
-    in ISO 8601 Strings umwandelt, damit sie über Channels gesendet werden können.
+    Rekursive Hilfsfunktion, die Datetime-Objekte in einem Dictionary/einer Liste
+    in ISO 8601-Strings umwandelt, damit sie über Channels gesendet werden können.
     """
     if isinstance(obj, datetime):
         return obj.isoformat()
@@ -610,35 +739,37 @@ def _to_serializable_dict(obj):
         return [_to_serializable_dict(elem) for elem in obj]
     return obj
 
-    # Utility function to make naive datetimes timezone-aware
+# Hilfsfunktion, um naive Datetimes zeitzonenbewusst zu machen
 def make_aware_from_iso(iso_string):
     """
-    Parses an ISO formatted string to a datetime object and ensures it's timezone-aware (UTC).
-    If the string already contains timezone info, it will be parsed as aware.
-    If it's naive, it will be made aware with UTC.
+    Analysiert einen ISO-formatierten String in ein Datetime-Objekt und stellt sicher,
+    dass es zeitzonenbewusst (UTC) ist.
+    Wenn der String bereits Zeitzoneninformationen enthält, wird er als zeitzonenbewusst analysiert.
+    Wenn er naiv ist, wird er mit UTC zeitzonenbewusst gemacht.
+    Gibt None zurück, wenn iso_string None oder leer ist.
     """
     if not iso_string:
         return None
     dt_object = datetime.fromisoformat(iso_string)
     if timezone.is_aware(dt_object):
-        # If the datetime object is already timezone-aware, ensure it's in UTC
+        # Wenn das Datetime-Objekt bereits zeitzonenbewusst ist, stellen Sie sicher, dass es in UTC ist
         return dt_object.astimezone(pytz.utc)
     else:
-        # If it's naive, make it timezone-aware with UTC
+        # Wenn es naiv ist, machen Sie es mit UTC zeitzonenbewusst
         return timezone.make_aware(dt_object, pytz.utc)
 
 def _round_numeric_values_for_display(data_dict, decimal_places=2):
     """
-    Recursively rounds numeric 'value' fields within a dictionary for display purposes.
-    This function creates a deep copy to avoid modifying the original data.
-    It also handles the new structure of feature and prediction data.
+    Rundet rekursiv numerische 'value'-Felder innerhalb eines Dictionaries für Anzeigezwecke.
+    Diese Funktion erstellt eine tiefe Kopie, um die ursprünglichen Daten nicht zu ändern.
+    Sie behandelt auch die neue Struktur von Feature- und Vorhersagedaten.
     """
     rounded_data = {}
     for key, item in data_dict.items():
         if isinstance(item, dict):
             if 'value' in item and isinstance(item['value'], (int, float)):
                 rounded_data[key] = {**item, 'value': round(item['value'], decimal_places)}
-            elif 'mean' in item and 'min' in item:
+            elif 'mean' in item and 'min' in item: # Annahme Feature-Datenstruktur
                 rounded_item = {}
                 for sub_key, sub_value in item.items():
                     if isinstance(sub_value, (int, float)):
@@ -646,13 +777,14 @@ def _round_numeric_values_for_display(data_dict, decimal_places=2):
                     else:
                         rounded_item[sub_key] = sub_value
                 rounded_data[key] = rounded_item
-            elif 'status_value' in item:
+            elif 'status_value' in item: # Annahme Vorhersage-Datenstruktur
                 rounded_item = {**item}
+                # status_value selbst wird nicht gerundet, aber andere numerische Felder könnten, wenn sie existierten
                 rounded_data[key] = rounded_item
-            else:
+            else: # Rekursion in verschachtelte Dictionaries
                 rounded_data[key] = _round_numeric_values_for_display(item, decimal_places)
-        elif isinstance(item, list):
+        elif isinstance(item, list): # Rekursion in Listen
             rounded_data[key] = [_round_numeric_values_for_display(elem, decimal_places) for elem in item]
-        else:
+        else: # Nicht-Dictionary-, Nicht-Listen-Elemente werden direkt kopiert
             rounded_data[key] = item
     return rounded_data

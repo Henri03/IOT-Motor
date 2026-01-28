@@ -130,24 +130,20 @@ def generate_twin_data(live_data_payload):
 def generate_feature_data_dummy(metric_value, timestamp):
     """
     Generates dummy feature data based on a single metric value and includes a timestamp.
-    For this dummy sender, constant values are used for simplicity,
-    but they are derived from the input metric_value to simulate relevance.
+    The min and max values are given a slightly larger span as requested.
     """
-    # Using the metric_value to create a range for dummy feature calculation
-    # This makes the "constant" features slightly dynamic based on the input
     base_val = metric_value
     
-    # Dummy features - these are constants for the purpose of this exercise,
-    # but slightly varied based on the input metric_value for realism.
-    mean_val = round(base_val * 1.01, 2)
-    min_val = round(base_val * 0.95, 2)
-    max_val = round(base_val * 1.05, 2)
-    median_val = round(base_val * 1.00, 2)
-    std_dev_val = round(base_val * 0.02, 2) # 2% standard deviation
+    # Dummy features, with a wider span for min/max values
+    mean_val = round(base_val * random.uniform(0.98, 1.02), 2)
+    min_val = round(base_val * random.uniform(0.8, 0.95), 2) # Wider span
+    max_val = round(base_val * random.uniform(1.05, 1.2), 2) # Wider span
+    median_val = round(base_val * random.uniform(0.99, 1.01), 2)
+    std_dev_val = round(base_val * random.uniform(0.01, 0.05), 2) # Slightly varied std dev
     range_val = round(max_val - min_val, 2)
 
     features = {
-        "timestamp": timestamp, # Add the timestamp here
+        "timestamp": timestamp,
         "mean": mean_val,
         "min": min_val,
         "max": max_val,
@@ -160,25 +156,25 @@ def generate_feature_data_dummy(metric_value, timestamp):
 def generate_prediction_data_dummy(metric_value):
     """
     Generates dummy prediction data for a metric.
-    It sends a status (-1 for 'bad', 1 for 'good')
-    based on a simple threshold or random choice for demonstration.
+    It sends a status (-1 for 'bad', 1 for 'good').
+    The publisher should send -1 (bad value) rarely.
     """
-    # A simple rule for demonstration: if metric_value is above a certain threshold, it's 'bad'.
-    # Otherwise, it's 'good'.
-    # For a real scenario, this would come from a trained ML model.
     status = 1  # Assume good by default
-    
-    # Introduce some variability or anomaly based on the metric value
-    if "temp" in TOPIC_PREDICTION_TEMPERATURE and metric_value > 70:
-        status = -1
-    elif "current" in TOPIC_PREDICTION_CURRENT and metric_value > 20:
-        status = -1
-    elif "torque" in TOPIC_PREDICTION_TORQUE and metric_value > 75:
+
+    # Introduce a 'bad' prediction (-1) rarely, as requested.
+    # The probability of sending -1 is reduced.
+    if random.random() < 0.04:  # % chance of a 'bad' prediction (-1)
         status = -1
     
-    # Randomly introduce a 'bad' prediction for more variability
-    if random.random() < 0.1: # 10% chance of a random 'bad' prediction
-        status = -1 if status == 1 else 1 # Flip if already bad, or make it bad
+    # Only check thresholds if status is not already -1 from the random chance.
+    # This ensures that -1 predictions remain rare.
+    #if status == 1: 
+    #    if "temp" in TOPIC_PREDICTION_TEMPERATURE and metric_value > 75: # Higher threshold for bad
+     #       status = -1
+      #  elif "current" in TOPIC_PREDICTION_CURRENT and metric_value > 22: # Higher threshold for bad
+       #     status = -1
+        #elif "torque" in TOPIC_PREDICTION_TORQUE and metric_value > 85: # Higher threshold for bad
+         #   status = -1
 
     prediction = {
         "value": status
@@ -208,12 +204,12 @@ def publish_data():
             twin_data_payload = generate_twin_data(live_data_payload)
 
             # Publish Live Data 
-            # client.publish(TOPIC_LIVE, json.dumps(live_data_payload))
-            # print(f"[MQTT] Gesendet → Topic: {TOPIC_LIVE} | Payload: {json.dumps(live_data_payload)}")
+            #client.publish(TOPIC_LIVE, json.dumps(live_data_payload))
+            #print(f"[MQTT] Sent → Topic: {TOPIC_LIVE} | Payload: {json.dumps(live_data_payload)}")
 
              # Publish Twin Data 
             client.publish(TOPIC_TWIN, json.dumps(twin_data_payload))
-            print(f"[MQTT] Gesendet → Topic: {TOPIC_TWIN} | Payload: {json.dumps(twin_data_payload)}")
+            print(f"[MQTT] Sent → Topic: {TOPIC_TWIN} | Payload: {json.dumps(twin_data_payload)}")
 
             # Extract relevant values for Raw Data
             raw_temp = live_data_payload.get('temp')
@@ -227,29 +223,29 @@ def publish_data():
             if raw_temp is not None:
                 raw_temp_payload = {"timestamp": current_timestamp_utc, "value": raw_temp}
                 client.publish(TOPIC_RAW_TEMPERATURE, json.dumps(raw_temp_payload))
-                print(f"[MQTT] Gesendet → Topic: {TOPIC_RAW_TEMPERATURE} | Payload: {json.dumps(raw_temp_payload)}")
+                print(f"[MQTT] Sent → Topic: {TOPIC_RAW_TEMPERATURE} | Payload: {json.dumps(raw_temp_payload)}")
             if raw_current is not None:
                 raw_current_payload = {"timestamp": current_timestamp_utc, "value": raw_current}
                 client.publish(TOPIC_RAW_CURRENT, json.dumps(raw_current_payload))
-                print(f"[MQTT] Gesendet → Topic: {TOPIC_RAW_CURRENT} | Payload: {json.dumps(raw_current_payload)}")
+                print(f"[MQTT] Sent → Topic: {TOPIC_RAW_CURRENT} | Payload: {json.dumps(raw_current_payload)}")
             if raw_torque is not None:
                 raw_torque_payload = {"timestamp": current_timestamp_utc, "value": raw_torque}
                 client.publish(TOPIC_RAW_TORQUE, json.dumps(raw_torque_payload))
-                print(f"[MQTT] Gesendet → Topic: {TOPIC_RAW_TORQUE} | Payload: {json.dumps(raw_torque_payload)}")
+                print(f"[MQTT] Sent → Topic: {TOPIC_RAW_TORQUE} | Payload: {json.dumps(raw_torque_payload)}")
 
             # Publish Feature Data (using live data values as a base for feature calculation)
             if raw_temp is not None:
                 feature_temp_payload = generate_feature_data_dummy(raw_temp, current_timestamp_utc) # Pass timestamp
                 client.publish(TOPIC_FEATURE_TEMPERATURE, json.dumps(feature_temp_payload))
-                print(f"[MQTT] Gesendet → Topic: {TOPIC_FEATURE_TEMPERATURE} | Payload: {json.dumps(feature_temp_payload)}")
+                print(f"[MQTT] Sent → Topic: {TOPIC_FEATURE_TEMPERATURE} | Payload: {json.dumps(feature_temp_payload)}")
             if raw_current is not None:
                 feature_current_payload = generate_feature_data_dummy(raw_current, current_timestamp_utc) # Pass timestamp
                 client.publish(TOPIC_FEATURE_CURRENT, json.dumps(feature_current_payload))
-                print(f"[MQTT] Gesendet → Topic: {TOPIC_FEATURE_CURRENT} | Payload: {json.dumps(feature_current_payload)}")
+                print(f"[MQTT] Sent → Topic: {TOPIC_FEATURE_CURRENT} | Payload: {json.dumps(feature_current_payload)}")
             if raw_torque is not None:
                 feature_torque_payload = generate_feature_data_dummy(raw_torque, current_timestamp_utc) # Pass timestamp
                 client.publish(TOPIC_FEATURE_TORQUE, json.dumps(feature_torque_payload))
-                print(f"[MQTT] Gesendet → Topic: {TOPIC_FEATURE_TORQUE} | Payload: {json.dumps(feature_torque_payload)}")
+                print(f"[MQTT] Sent → Topic: {TOPIC_FEATURE_TORQUE} | Payload: {json.dumps(feature_torque_payload)}")
 
             # Publish Prediction Data (using live data values as a base for prediction)
             # The timestamp for prediction must be the same as for raw data
@@ -257,17 +253,17 @@ def publish_data():
                 prediction_temp_payload_value = generate_prediction_data_dummy(raw_temp)
                 prediction_temp_payload = {"timestamp": current_timestamp_utc, "value": prediction_temp_payload_value["value"]}
                 client.publish(TOPIC_PREDICTION_TEMPERATURE, json.dumps(prediction_temp_payload))
-                print(f"[MQTT] Gesendet → Topic: {TOPIC_PREDICTION_TEMPERATURE} | Payload: {json.dumps(prediction_temp_payload)}")
+                print(f"[MQTT] Sent → Topic: {TOPIC_PREDICTION_TEMPERATURE} | Payload: {json.dumps(prediction_temp_payload)}")
             if raw_current is not None:
                 prediction_current_payload_value = generate_prediction_data_dummy(raw_current)
                 prediction_current_payload = {"timestamp": current_timestamp_utc, "value": prediction_current_payload_value["value"]}
                 client.publish(TOPIC_PREDICTION_CURRENT, json.dumps(prediction_current_payload))
-                print(f"[MQTT] Gesendet → Topic: {TOPIC_PREDICTION_CURRENT} | Payload: {json.dumps(prediction_current_payload)}")
+                print(f"[MQTT] Sent → Topic: {TOPIC_PREDICTION_CURRENT} | Payload: {json.dumps(prediction_current_payload)}")
             if raw_torque is not None:
                 prediction_torque_payload_value = generate_prediction_data_dummy(raw_torque)
                 prediction_torque_payload = {"timestamp": current_timestamp_utc, "value": prediction_torque_payload_value["value"]}
                 client.publish(TOPIC_PREDICTION_TORQUE, json.dumps(prediction_torque_payload))
-                print(f"[MQTT] Gesendet → Topic: {TOPIC_PREDICTION_TORQUE} | Payload: {json.dumps(prediction_torque_payload)}")
+                print(f"[MQTT] Sent → Topic: {TOPIC_PREDICTION_TORQUE} | Payload: {json.dumps(prediction_torque_payload)}")
 
             time.sleep(5) # Publish every 5 seconds
     except KeyboardInterrupt:
