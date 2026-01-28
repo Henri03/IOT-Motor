@@ -141,6 +141,7 @@ class Command(BaseCommand):
         """
         command_instance = userdata['command_instance']
 
+        # Zentrales Logging für empfangene Nachrichten
         command_instance.stdout.write(f"Empfangen auf Topic: {msg.topic}, Payload: {msg.payload.decode()}")
 
         try:
@@ -154,33 +155,33 @@ class Command(BaseCommand):
 
             # --- Topic-basierte Nachrichtenverarbeitung ---
             if msg.topic == command_instance.topic_live:
-                await command_instance._handle_live_data(payload)
+                await command_instance._handle_live_data(msg.topic, payload)
             elif msg.topic == command_instance.topic_twin:
-                await command_instance._handle_twin_data(payload)
+                await command_instance._handle_twin_data(msg.topic, payload)
             elif msg.topic == command_instance.topic_malfunction_info:
-                await command_instance._handle_malfunction_data(payload, 'INFO')
+                await command_instance._handle_malfunction_data(msg.topic, payload, 'INFO')
             elif msg.topic == command_instance.topic_malfunction_warning:
-                await command_instance._handle_malfunction_data(payload, 'WARNING')
+                await command_instance._handle_malfunction_data(msg.topic, payload, 'WARNING')
             elif msg.topic == command_instance.topic_malfunction_error:
-                await command_instance._handle_malfunction_data(payload, 'ERROR')
+                await command_instance._handle_malfunction_data(msg.topic, payload, 'ERROR')
             elif msg.topic == command_instance.topic_raw_temperature:
-                await command_instance._handle_raw_data(payload, 'temperature')
+                await command_instance._handle_raw_data(msg.topic, payload, 'temperature')
             elif msg.topic == command_instance.topic_raw_current:
-                await command_instance._handle_raw_data(payload, 'current')
+                await command_instance._handle_raw_data(msg.topic, payload, 'current')
             elif msg.topic == command_instance.topic_raw_torque:
-                await command_instance._handle_raw_data(payload, 'torque')
+                await command_instance._handle_raw_data(msg.topic, payload, 'torque')
             elif msg.topic == command_instance.topic_feature_temperature:
-                await command_instance._handle_feature_data(payload, 'temperature')
+                await command_instance._handle_feature_data(msg.topic, payload, 'temperature')
             elif msg.topic == command_instance.topic_feature_current:
-                await command_instance._handle_feature_data(payload, 'current')
+                await command_instance._handle_feature_data(msg.topic, payload, 'current')
             elif msg.topic == command_instance.topic_feature_torque:
-                await command_instance._handle_feature_data(payload, 'torque')
+                await command_instance._handle_feature_data(msg.topic, payload, 'torque')
             elif msg.topic == command_instance.topic_prediction_temperature:
-                await command_instance._handle_prediction_data(payload, 'temperature')
+                await command_instance._handle_prediction_data(msg.topic, payload, 'temperature')
             elif msg.topic == command_instance.topic_prediction_current:
-                await command_instance._handle_prediction_data(payload, 'current')
+                await command_instance._handle_prediction_data(msg.topic, payload, 'current')
             elif msg.topic == command_instance.topic_prediction_torque:
-                await command_instance._handle_prediction_data(payload, 'torque')
+                await command_instance._handle_prediction_data(msg.topic, payload, 'torque')
             else:
                 command_instance.stdout.write(f"INFO: Unbekanntes Topic empfangen: {msg.topic}")
 
@@ -196,33 +197,36 @@ class Command(BaseCommand):
             command_instance.stderr.write(command_instance.style.ERROR(f"Ein unerwarteter Fehler bei der Verarbeitung der MQTT-Nachricht auf Topic {msg.topic}: {e}"))
             traceback.print_exc()
 
-    async def _handle_live_data(self, payload):
+    async def _handle_live_data(self, topic, payload):
         """
         Verarbeitet Nachrichten vom Live-Daten-Topic.
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
+        self.stdout.write(f"Handling Live Data: Topic={topic}, Payload={payload}")
         await self._save_live_data(payload)
         logger.debug(f"Live-Daten gespeichert.")
         await self._notify_dashboard_for_plot_data_point() # Benachrichtigt für Plots
         # LiveData ist die Hauptquelle für Panel-Werte, daher Panel-Update triggern
         await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
 
-    async def _handle_twin_data(self, payload):
+    async def _handle_twin_data(self, topic, payload):
         """
         Verarbeitet Nachrichten vom Twin-Daten-Topic.
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
+        self.stdout.write(f"Handling Twin Data: Topic={topic}, Payload={payload}")
         await self._save_twin_data(payload)
         logger.debug(f"Twin-Daten gespeichert.")
         await self._notify_dashboard_for_plot_data_point() # Benachrichtigt für Plots
         # TwinData ist wichtig für Panel-Vergleiche, daher Panel-Update triggern
         await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
 
-    async def _handle_malfunction_data(self, payload, topic_type):
+    async def _handle_malfunction_data(self, topic, payload, topic_type):
         """
         Verarbeitet Nachrichten von den Malfunction-Topics (Info, Warning, Error).
         Speichert die Daten im MalfunctionLog und benachrichtigt das Dashboard über eine Änderung im Anomaly-Status.
         """
+        self.stdout.write(f"Handling Malfunction Data ({topic_type}): Topic={topic}, Payload={payload}")
         if 'message_type' not in payload:
             payload['message_type'] = topic_type
         await self._save_malfunction_log(payload)
@@ -230,33 +234,36 @@ class Command(BaseCommand):
         # Malfunction logs beeinflussen den Anomaly-Status und die Log-Anzeige, daher Panel-Update triggern
         await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
 
-    async def _handle_raw_data(self, payload, metric_type):
+    async def _handle_raw_data(self, topic, payload, metric_type):
         """
         Verarbeitet Nachrichten von den Rohdaten-Topics.
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
+        self.stdout.write(f"Handling Raw Data ({metric_type}): Topic={topic}, Payload={payload}")
         await self._save_raw_data(payload, metric_type)
         logger.debug(f"Rohdaten für {metric_type} empfangen und gespeichert: {payload}.")
         await self._notify_dashboard_for_plot_data_point() # Benachrichtigt für Plots
         # Rohdaten beeinflussen die Panel-Anzeige des realen Motors, daher Panel-Update triggern
         await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
 
-    async def _handle_feature_data(self, payload, metric_type):
+    async def _handle_feature_data(self, topic, payload, metric_type):
         """
         Verarbeitet Nachrichten von den Feature-Topics.
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
+        self.stdout.write(f"Handling Feature Data ({metric_type}): Topic={topic}, Payload={payload}")
         await self._save_feature_data(payload, metric_type)
         logger.debug(f"Feature-Daten für {metric_type} empfangen und gespeichert: {payload}.")
         await self._notify_dashboard_for_plot_data_point() # Benachrichtigt für Plots
         # Feature-Daten können die Anomalie-Erkennung beeinflussen (wenn diese Features nutzt), daher Panel-Update triggern
         await self._process_and_notify_dashboard(self.deviation_threshold, self.last_anomaly_state)
 
-    async def _handle_prediction_data(self, payload, metric_type):
+    async def _handle_prediction_data(self, topic, payload, metric_type):
         """
         Verarbeitet Nachrichten von den Vorhersage-Topics.
         Speichert die Daten und benachrichtigt das Dashboard über einen neuen Plot-Datenpunkt.
         """
+        self.stdout.write(f"Handling Prediction Data ({metric_type}): Topic={topic}, Payload={payload}")
         await self._save_prediction_data(payload, metric_type)
         logger.debug(f"Vorhersagedaten für {metric_type} empfangen und gespeichert: {payload}.")
         await self._notify_dashboard_for_plot_data_point() # Benachrichtigt für Plots
