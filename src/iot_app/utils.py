@@ -3,7 +3,8 @@ from .models import LiveData, TwinData, MalfunctionLog, MotorInfo, RawData, Feat
 from django.utils import timezone
 from datetime import timedelta, datetime
 from django.db.models import Q
-import pytz
+import pytz # Import pytz here
+
 # iot_app/utils.py acts as a toolbox for your IoT application, providing reusable functions to fetch, process, and format data, especially for presentation on the dashboard.
 
 def get_latest_live_data():
