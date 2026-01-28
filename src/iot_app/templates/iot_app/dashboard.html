@@ -566,8 +566,20 @@
         let charts = {};
         // Flag to indicate if the end time is set to "live"
         let liveEndTimeMode = false; // New flag to track if the current view is live-updating
-        // Default time window for live mode in milliseconds (10 minutes)
-        const LIVE_WINDOW_MS = 10 * 60 * 1000;
+        // Stores the start time of the currently displayed live window (if in live mode)
+        let currentLiveWindowStartTime = null;
+
+        /**
+         * Converts a string to a URL-friendly slug format.
+         * @param {string} text - The input string.
+         * @returns {string} The slugified string.
+         */
+        function createSlug(text) {
+            return text.toLowerCase()
+                       .replace(/[\s_]+/g, '-') // Replace spaces/underscores with hyphens
+                       .replace(/[^a-z0-9-]+/g, '') // Remove non-alphanumeric characters except hyphens
+                       .replace(/^-*|-*$/g, ''); // Trim leading/trailing hyphens
+        }
 
         // Configuration for shared Y-axis scales across corresponding charts
         const yAxisSharedGroups = {
@@ -650,18 +662,6 @@
                 yAxisID: 'y'
             }
         };
-
-        /**
-         * Converts a string to a URL-friendly slug format.
-         * @param {string} text - The input string.
-         * @returns {string} The slugified string.
-         */
-        function createSlug(text) {
-            return text.toLowerCase()
-                       .replace(/[\s_]+/g, '-') // Replace spaces/underscores with hyphens
-                       .replace(/[^a-z0-9-]+/g, '') // Remove non-alphanumeric characters except hyphens
-                       .replace(/^-*|-*$/g, ''); // Trim leading/trailing hyphens
-        }
 
         /**
          * Initializes a Chart.js chart on a given canvas.
@@ -897,13 +897,13 @@
          * Updates all charts with historical data received from the server.
          * Clears existing chart data and repopulates with the new historical data.
          * @param {Object} plotData - Historical data for live, twin, raw, and feature metrics.
-         * @param {string} plotType - Type of plot data (e.g., 'initial_historical', 'historical_range', 'initial_live_10_min').
+         * @param {string} plotType - Type of plot data (e.g., 'initial_historical', 'historical_range', 'initial_load_live').
          * @param {string} startTime - The start time of the historical data range (ISO string, UTC).
          * @param {string} endTime - The end time of the historical data range (ISO string, UTC, or 'live').
          * @param {boolean} isLiveModeActive - Indicates if the backend considers this a live-updating view.
          */
         function updateChartsWithHistoricalData(plotData, plotType, startTime, endTime, isLiveModeActive) {
-            console.log("Updating charts with historical data. Live mode active:", isLiveModeActive);
+            console.log("Updating charts with historical data. Live mode active:", isLiveModeActive, "Start:", startTime, "End:", endTime);
             // Clear all existing chart data
             Object.values(charts).forEach(chart => {
                 chart.data.datasets.forEach(dataset => {
@@ -1009,12 +1009,13 @@
 
             // Update time range input fields and flags
             liveEndTimeMode = isLiveModeActive; // Set based on backend's live_mode_active
+            currentLiveWindowStartTime = isLiveModeActive && startTime ? new Date(startTime) : null; // Store the actual start time for live mode
 
             Object.values(charts).forEach(chart => {
-                const now = new Date();
                 if (isLiveModeActive) {
                     // For live mode, set the X-axis to a dynamic window
-                    const start = startTime ? new Date(startTime) : new Date(now.getTime() - LIVE_WINDOW_MS);
+                    const now = new Date();
+                    const start = currentLiveWindowStartTime || new Date(now.getTime() - (10 * 60 * 1000)); // Fallback to 10 min if no specific start time
                     chart.options.scales.x.min = start;
                     chart.options.scales.x.max = now;
                     console.log(`Chart ${chart.canvas.id} set to live mode: min=${chart.options.scales.x.min.toLocaleTimeString()}, max=${chart.options.scales.x.max.toLocaleTimeString()}`);
@@ -1058,8 +1059,8 @@
             }
 
             const now = new Date();
-            // In live mode, the start time input should be empty, so minTime will always be now - LIVE_WINDOW_MS
-            const minTime = now.getTime() - LIVE_WINDOW_MS;
+            // Determine minTime based on currentLiveWindowStartTime (if set) or fallback to a 10-minute window
+            const minTime = currentLiveWindowStartTime ? currentLiveWindowStartTime.getTime() : (now.getTime() - (10 * 60 * 1000));
             console.log(`Current time: ${now.toLocaleTimeString()}, Min time for window: ${new Date(minTime).toLocaleTimeString()}`);
 
             // Define a more robust mapping from dataPoint keys to chart IDs and dataset indices

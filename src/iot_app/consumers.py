@@ -1,4 +1,4 @@
-# path: IOT_PROJECT/src/iot_app/consumers.py
+# IOT_PROJECT/src/iot_app/consumers.py
 
 # Websocket
 # Definiert den DashboardConsumer, der für die Handhabung von WebSocket-Verbindungen für ein Echtzeit-Dashboard verantwortlich ist.
@@ -42,7 +42,8 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         await self.send_current_data()                                                      # Sendet die aktuellen Dashboard-Panel-Daten an den neu verbundenen Client.
         # On initial load, set live_mode_active to True and request last 10 minutes
         self.live_mode_active = True
-        await self.send_plot_data(plot_type='initial_live_10_min') # Calls send_plot_data with a specific type for initial live load
+        # Initial load should show the current run or last 10 minutes live
+        await self.send_plot_data(plot_type='initial_load_live')
 
     async def disconnect(self, close_code):
         print(f"WebSocket disconnected: {self.channel_name}")
@@ -77,7 +78,7 @@ class DashboardConsumer(AsyncWebsocketConsumer):
 
                 if end_time_str == 'live':
                     end_time = 'live' # Keep as string 'live' for send_plot_data to handle
-                    self.live_mode_active = True # Activate live mode
+                    # live_mode_active will be set in send_plot_data based on logic
                 elif end_time_str:
                     end_time = datetime.fromisoformat(end_time_str)
                     if end_time.tzinfo is None:
@@ -87,14 +88,13 @@ class DashboardConsumer(AsyncWebsocketConsumer):
                     # If no end_time_str is provided, it implies a fixed range up to now, so deactivate live mode
                     self.live_mode_active = False
 
-                print(f"Frontend requested plot data: start={start_time_str}, end={end_time_str}, live_mode_active={self.live_mode_active}")
-                await self.send_plot_data(start_time=start_time, end_time=end_time, plot_type='historical_range')
+                print(f"Frontend requested plot data: start={start_time_str}, end={end_time_str}. Preparing to call send_plot_data.")
+                await self.send_plot_data(start_time=start_time, end_time=end_time, plot_type='historical_or_live_range')
 
             elif message_type == 'request_initial_data':
                 # Frontend requests initial data (e.g., "Aktuellen Lauf anzeigen" button or initial load)
-                print("Frontend requested initial data (live 10 min).")
-                self.live_mode_active = True
-                await self.send_plot_data(plot_type='initial_live_10_min') # Request initial live 10 min
+                print("Frontend requested initial data (current run or 10 min live).")
+                await self.send_plot_data(plot_type='initial_load_live') # Request initial live view
 
             else:
                 print(f"Unknown message type received from frontend: {message_type}")
@@ -131,8 +131,8 @@ class DashboardConsumer(AsyncWebsocketConsumer):
             # A new plot boundary has been set, re-send historical data
             # This might be triggered by external events, so re-evaluate live mode
             if self.live_mode_active:
-                print("Received plot_boundary_update in live mode, re-requesting initial live 10 min.")
-                await self.send_plot_data(plot_type='initial_live_10_min') # Re-send current live 10 min
+                print("Received plot_boundary_update in live mode, re-requesting initial live view.")
+                await self.send_plot_data(plot_type='initial_load_live') # Re-send current live view
             else:
                 print("Received plot_boundary_update, but not in live mode. No action taken.")
                 pass # The frontend will handle re-requesting if needed for fixed ranges
@@ -191,34 +191,46 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         current_end_time = end_time
         is_live_mode_active_for_response = False
 
-        # Case 1: Initial load or "Show current run" button -> always 10 min live
-        if plot_type == 'initial_live_10_min':
-            current_end_time = timezone.now()
-            current_start_time = current_end_time - timedelta(minutes=10)
-            is_live_mode_active_for_response = True
-            self.live_mode_active = True
-            print(f"send_plot_data: initial_live_10_min requested. Setting window to {current_start_time} - {current_end_time}. Live mode: TRUE")
-
-        # Case 2: Frontend explicitly requested 'live' end_time
-        elif end_time == 'live':
-            current_end_time = timezone.now()
-            # If a start_time was provided, use it, otherwise default to 10 min window
-            if current_start_time is None:
+        # Case 1: Initial load or "Show current run" button
+        if plot_type == 'initial_load_live':
+            # Try to get active run, otherwise default to last 10 minutes
+            active_run_start, active_run_end = await self._get_active_run_time_window()
+            if active_run_start and active_run_end:
+                current_start_time = active_run_start
+                current_end_time = active_run_end # Will be timezone.now() if run is ongoing
+                print(f"send_plot_data: initial_load_live requested. Using active run window: {current_start_time} - {current_end_time}.")
+            else:
+                current_end_time = timezone.now()
                 current_start_time = current_end_time - timedelta(minutes=10)
+                print(f"send_plot_data: initial_load_live requested. No active run, defaulting to last 10 minutes: {current_start_time} - {current_end_time}.")
+
+            is_live_mode_active_for_response = True # Initial load is always live
+            self.live_mode_active = True
+
+        # Case 2: Frontend explicitly requested 'live' end_time (manual start time possible)
+        elif end_time == 'live':
+            current_end_time = timezone.now() # End time is always now in live mode
+            if current_start_time is None:
+                # If no start_time was provided, default to 10 min window from now
+                current_start_time = current_end_time - timedelta(minutes=10)
+                print(f"send_plot_data: live end_time requested, no start_time. Setting window to last 10 minutes: {current_start_time} - {current_end_time}. Live mode: TRUE")
+            else:
+                # Use the provided start_time with current_end_time as now
+                print(f"send_plot_data: live end_time requested with manual start_time. Setting window to {current_start_time} - {current_end_time}. Live mode: TRUE")
+
             is_live_mode_active_for_response = True
             self.live_mode_active = True
-            print(f"send_plot_data: live end_time requested. Setting window to {current_start_time} - {current_end_time}. Live mode: TRUE")
 
-        # Case 3: Fixed historical range or default behavior (active run / last 10 min static)
+        # Case 3: Fixed historical range (both start_time and end_time are specific datetimes)
         else:
             # If no start/end time provided, determine active run or default to last 10 min static
             if current_start_time is None and current_end_time is None:
                 current_start_time, current_end_time = await self._get_active_run_time_window()
-                if current_start_time is None or current_end_time is None:
-                    current_end_time = timezone.now()
-                    current_start_time = current_end_time - timedelta(minutes=10)
+                # If _get_active_run_time_window returns None, it means no active run and it already
+                # defaults to last 10 minutes, so current_start_time and current_end_time will be set.
                 print(f"send_plot_data: No explicit range, using active run/default 10 min static: {current_start_time} - {current_end_time}. Live mode: FALSE")
             else:
+                # This is a manually specified fixed historical range
                 print(f"send_plot_data: Fixed historical range requested: {current_start_time} - {current_end_time}. Live mode: FALSE")
 
             is_live_mode_active_for_response = False
