@@ -1,4 +1,5 @@
 # path: IOT_PROJECT/src/iot_app/management/commands/mqtt_consumer.py
+
 import json
 import paho.mqtt.client as mqtt
 from django.core.management.base import BaseCommand
@@ -12,6 +13,7 @@ from datetime import datetime
 import asyncio
 import pytz
 import logging
+from django.db.models import Q
 
 logger = logging.getLogger(__name__)
 
@@ -380,13 +382,25 @@ class Command(BaseCommand):
             logger.warning("Kein Motor gefunden, kann kein detailliertes Dashboard-Update senden.")
             retracted_count = "N/A"
             extended_count = "N/A"
+            motor_state = "N/A"
         else:
             retracted_count = await sync_to_async(MalfunctionLog.objects.filter(
-                description__icontains='motor fährt ein', message_type='INFO'
+                description__icontains='fährt ein', message_type='INFO'
             ).count)()
             extended_count = await sync_to_async(MalfunctionLog.objects.filter(
-                description__icontains='motor fährt aus', message_type='INFO'
+                description__icontains='fährt aus', message_type='INFO'
             ).count)()
+            
+            # Determine motor state
+            latest_motor_state_log = await sync_to_async(MalfunctionLog.objects.filter(
+                Q(description__icontains='Motorzustand:')
+            ).order_by('-timestamp').first)()
+            motor_state = "Unbekannt"
+            if latest_motor_state_log:
+                # Extract state from description like "Motorzustand: fährt ein"
+                state_match = latest_motor_state_log.description.split("Motorzustand: ")
+                if len(state_match) > 1:
+                    motor_state = state_match[1].strip()
 
         latest_live_data = await sync_to_async(LiveData.objects.order_by('-timestamp').first)()
         latest_twin_data = await sync_to_async(TwinData.objects.order_by('-timestamp').first)()
@@ -422,6 +436,7 @@ class Command(BaseCommand):
         # --- Hier die Anpassung für 'prediction' in raw_data_panel ---
         # Stellen Sie sicher, dass die prediction-Werte für die Panel-Anzeige korrekt sind
         real_motor_data = {
+            "Motorzustand": {"value": motor_state, "unit": ""},
             "Strom": {
                 "value": latest_raw_data['current'].value if is_data_fresh(latest_raw_data['current'], self.data_freshness_threshold) else '-',
                 "unit": "A",
@@ -447,6 +462,7 @@ class Command(BaseCommand):
         # --- Ende der Anpassung ---
 
         digital_twin_data = {
+            "Motorzustand": {"value": motor_state, "unit": ""}, # Digital twin also shows current state
             "Strom": {"value": latest_twin_data.current if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "A"},
             "Spannung": {"value": latest_twin_data.voltage if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "V"},
             "Drehzahl": {"value": latest_twin_data.rpm if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "U/min"},

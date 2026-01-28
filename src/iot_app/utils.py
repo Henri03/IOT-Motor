@@ -1,4 +1,5 @@
 # path: src/iot_app/utils.py
+
 from .models import LiveData, TwinData, MalfunctionLog, MotorInfo, RawData, FeatureData, PredictionData
 from django.utils import timezone
 from datetime import timedelta, datetime
@@ -166,8 +167,27 @@ def get_dashboard_data():
     # Get latest RawData for Current, Temperature, Torque (priority)
     raw_data_panel = get_latest_raw_data_for_dashboard()
 
+    # Determine motor state
+    latest_motor_state_log = MalfunctionLog.objects.filter(
+        Q(description__icontains='Motorzustand:')
+    ).order_by('-timestamp').first()
+    motor_state = "Unbekannt"
+    if latest_motor_state_log:
+        state_match = latest_motor_state_log.description.split("Motorzustand: ")
+        if len(state_match) > 1:
+            motor_state = state_match[1].strip()
+
+    # Get counts for 'Anzahl eingefahren' and 'Anzahl ausgefahren'
+    retracted_count = MalfunctionLog.objects.filter(
+        description__icontains='motor fährt ein', message_type='INFO'
+    ).count()
+    extended_count = MalfunctionLog.objects.filter(
+        description__icontains='motor fährt aus', message_type='INFO'
+    ).count()
+
     # Construct real_motor_data, prioritizing RawData where available
     real_motor_data = {
+        'Motorzustand': {'value': motor_state, 'unit': ''},
         'Strom': raw_data_panel['current'] if raw_data_panel['current']['value'] is not None else live_data['Strom'],
         'Spannung': live_data['Spannung'],
         'Drehzahl': live_data['Drehzahl'],
@@ -175,13 +195,15 @@ def get_dashboard_data():
         'Temperatur': raw_data_panel['temperature'] if raw_data_panel['temperature']['value'] is not None else live_data['Temperatur'],
         'Drehmoment': raw_data_panel['torque'] if raw_data_panel['torque']['value'] is not None else live_data['Drehmoment'],
         'Laufzeit': live_data['Laufzeit'], # Assuming run_time is only in LiveData
+        'Anzahl_eingefahren': {'value': retracted_count, 'unit': ''},
+        'Anzahl_ausgefahren': {'value': extended_count, 'unit': ''},
     }
-    # Add 'Anzahl eingefahren' and 'Anzahl ausgefahren' from a placeholder or actual logic if available
-    # For now, these are handled in mqtt_consumer.py's _process_and_notify_dashboard
-    real_motor_data['Anzahl_eingefahren'] = {'value': 'N/A', 'unit': ''}
-    real_motor_data['Anzahl_ausgefahren'] = {'value': 'N/A', 'unit': ''}
 
     digital_twin_data = get_latest_digital_twin()
+    # Add motor state to digital twin data as well
+    digital_twin_data['Motorzustand'] = {'value': motor_state, 'unit': ''}
+    digital_twin_data['Anzahl_eingefahren'] = {'value': retracted_count, 'unit': ''}
+    digital_twin_data['Anzahl_ausgefahren'] = {'value': 'N/A', 'unit': ''} # Twin doesn't necessarily have this
 
     dashboard_feature_data = get_latest_feature_data_for_dashboard()
     dashboard_prediction_data = get_latest_prediction_data_for_dashboard()

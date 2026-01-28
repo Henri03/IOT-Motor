@@ -1,3 +1,7 @@
+<!--path: src/iot_app/templates/iot_app/dashboard.html-->
+
+<!--Frontend-->
+
 {% load static %}
 <!DOCTYPE html>
 <html lang="de">
@@ -413,6 +417,7 @@
                         <div class="data-item"><strong>Drehmoment:</strong> <span id="real-drehmoment">{{ real_motor_data.Drehmoment.value|default:'N/A' }} {{ real_motor_data.Drehmoment.unit }}</span></div>
                         <div class="data-item"><strong>Anzahl eingefahren:</strong> <span id="real-anzahl-eingefahren">{{ real_motor_data.Anzahl_eingefahren.value|default:'N/A' }}</span></div>
                         <div class="data-item"><strong>Anzahl ausgefahren:</strong> <span id="real-anzahl-ausgefahren">{{ real_motor_data.Anzahl_ausgefahren.value|default:'N/A' }}</span></div>
+                        <div class="data-item"><strong>Motorzustand:</strong> <span id="real-motorzustand">{{ real_motor_data.Motorzustand.value|default:'N/A' }}</span></div>        
                     </div>
                 </div>
 
@@ -476,6 +481,7 @@
                         <div class="data-item"><strong>Drehmoment:</strong> <span id="expected-drehmoment">{{ digital_twin_data.Drehmoment.value|default:'N/A' }} {{ digital_twin_data.Drehmoment.unit }}</span></div>
                         <div class="data-item"><strong>Anzahl eingefahren:</strong> <span id="expected-anzahl-eingefahren">{{ digital_twin_data.Anzahl_eingefahren.value|default:'N/A' }}</span></div>
                         <div class="data-item"><strong>Anzahl ausgefahren:</strong> <span id="expected-anzahl-ausgefahren">{{ digital_twin_data.Anzahl_ausgefahren.value|default:'N/A' }}</span></div>
+                        <div class="data-item"><strong>Motorzustand:</strong> <span id="expected-motorzustand">{{ digital_twin_data.Motorzustand.value|default:'N/A' }}</span></div>
                     </div>
                 </div>
 
