@@ -715,13 +715,20 @@
                         borderColor: ds.borderColor,
                         backgroundColor: ds.backgroundColor || 'rgba(0, 0, 0, 0)', // Transparent background by default
                         borderWidth: ds.borderWidth || 2,
-                        pointRadius: ds.pointRadius !== undefined ? ds.pointRadius : 0, // Default to 0, unless explicitly set
+                        // pointRadius and pointBackgroundColor/Style will be handled by parsing for raw data
+                        pointRadius: ds.pointRadius !== undefined ? ds.pointRadius : 0,
                         pointBackgroundColor: ds.pointBackgroundColor || ds.borderColor,
-                        pointStyle: ds.pointStyle || 'circle', // Default point style
+                        pointStyle: ds.pointStyle || 'circle',
                         tension: ds.tension || 0.1, // Smooth line tension
                         yAxisID: ds.yAxisID || 'y', // Default Y-axis ID
                         borderDash: ds.borderDash || [],
                         showLine: ds.showLine !== undefined ? ds.showLine : true, // Show line by default
+                        // Add parsing for point styling based on prediction
+                        parsing: {
+                            xAxisKey: 'x',
+                            yAxisKey: 'y'
+                        },
+                        pointHitRadius: 5, // Make points easier to click for tooltips
                     }))
                 },
                 options: mergedOptions
@@ -1010,7 +1017,6 @@
                 const now = new Date();
                 if (isLiveModeActive) {
                     // For live mode, set the X-axis to a dynamic window
-                    // If a start time is provided, use it. Otherwise, use a sliding 10-minute window.
                     const start = startTime ? new Date(startTime) : new Date(now.getTime() - LIVE_WINDOW_MS);
                     chart.options.scales.x.min = start;
                     chart.options.scales.x.max = now;
@@ -1055,9 +1061,8 @@
             }
 
             const now = new Date();
-            const startInput = document.getElementById('plot-start-time').value;
-            // Calculate minTime: if startInput exists, use it, otherwise use sliding 10-min window
-            const minTime = startInput ? new Date(startInput).getTime() : now.getTime() - LIVE_WINDOW_MS;
+            // In live mode, the start time input should be empty, so minTime will always be now - LIVE_WINDOW_MS
+            const minTime = now.getTime() - LIVE_WINDOW_MS;
             console.log(`Current time: ${now.toLocaleTimeString()}, Min time for window: ${new Date(minTime).toLocaleTimeString()}`);
 
             // Define a more robust mapping from dataPoint keys to chart IDs and dataset indices
@@ -1160,7 +1165,7 @@
                     if (mapping.dataKey === 'raw' && sourceData && sourceData[mapping.metric]) {
                         value = sourceData[mapping.metric].y;
                         timestamp = new Date(sourceData[mapping.metric].x);
-                        predictionStatus = sourceData[mapping.metric].prediction;
+                        predictionStatus = sourceData[mapping.metric].prediction; // Get prediction from dataPoint
                     }
                     // Handle live data for voltage, rpm, vibration, and as fallback
                     else if (mapping.dataKey === 'live' && sourceData && sourceData[mapping.metric]) {

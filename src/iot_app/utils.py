@@ -3,7 +3,7 @@ from .models import LiveData, TwinData, MalfunctionLog, MotorInfo, RawData, Feat
 from django.utils import timezone
 from datetime import timedelta, datetime
 from django.db.models import Q
-
+import pytz
 # iot_app/utils.py acts as a toolbox for your IoT application, providing reusable functions to fetch, process, and format data, especially for presentation on the dashboard.
 
 def get_latest_live_data():
@@ -328,7 +328,8 @@ def get_plot_data(start_time=None, end_time=None):
     predictions_by_metric_and_time = {}
     for pred_entry in prediction_data_queryset:
         metric_type = pred_entry.metric_type
-        timestamp_key = pred_entry.timestamp.isoformat()
+        # Ensure timestamp is timezone-aware for consistent comparison
+        timestamp_key = pred_entry.timestamp.astimezone(pytz.utc).isoformat()
         if metric_type not in predictions_by_metric_and_time:
             predictions_by_metric_and_time[metric_type] = {}
         predictions_by_metric_and_time[metric_type][timestamp_key] = pred_entry.status_value
@@ -353,9 +354,10 @@ def get_plot_data(start_time=None, end_time=None):
 
     # Process RawData with prediction status
     for entry in raw_data_queryset:
-        ts = entry.timestamp.isoformat()
-        prediction_status = predictions_by_metric_and_time.get(entry.metric_type, {}).get(ts, None)
-        point = {'x': ts, 'y': entry.value, 'prediction': prediction_status} # Add prediction status
+        # Ensure timestamp is timezone-aware for consistent comparison
+        ts_utc = entry.timestamp.astimezone(pytz.utc).isoformat()
+        prediction_status = predictions_by_metric_and_time.get(entry.metric_type, {}).get(ts_utc, None)
+        point = {'x': entry.timestamp.isoformat(), 'y': entry.value, 'prediction': prediction_status} # Add prediction status
         if entry.metric_type == 'temperature' and entry.value is not None: plot_data['raw']['temperature'].append(point)
         if entry.metric_type == 'current' and entry.value is not None: plot_data['raw']['current'].append(point)
         if entry.metric_type == 'torque' and entry.value is not None: plot_data['raw']['torque'].append(point)

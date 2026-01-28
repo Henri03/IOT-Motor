@@ -1,4 +1,4 @@
-# IOT_PROJECT/src/iot_app/consumers.py
+# path: IOT_PROJECT/src/iot_app/consumers.py
 
 # Websocket
 # Definiert den DashboardConsumer, der für die Handhabung von WebSocket-Verbindungen für ein Echtzeit-Dashboard verantwortlich ist.

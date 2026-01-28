@@ -419,17 +419,32 @@ class Command(BaseCommand):
             .order_by('-timestamp')[:5].values()
         )
 
+        # --- Hier die Anpassung für 'prediction' in raw_data_panel ---
+        # Stellen Sie sicher, dass die prediction-Werte für die Panel-Anzeige korrekt sind
         real_motor_data = {
-            "Strom": {"value": latest_raw_data['current'].value if is_data_fresh(latest_raw_data['current'], self.data_freshness_threshold) else '-', "unit": "A"},
+            "Strom": {
+                "value": latest_raw_data['current'].value if is_data_fresh(latest_raw_data['current'], self.data_freshness_threshold) else '-',
+                "unit": "A",
+                "prediction": latest_prediction_data['current'].status_value if latest_prediction_data['current'] and is_data_fresh(latest_prediction_data['current'], self.data_freshness_threshold) else None
+            },
             "Spannung": {"value": latest_live_data.voltage if is_data_fresh(latest_live_data, self.data_freshness_threshold) else '-', "unit": "V"},
             "Drehzahl": {"value": latest_live_data.rpm if is_data_fresh(latest_live_data, self.data_freshness_threshold) else '-', "unit": "U/min"},
             "Vibration": {"value": latest_live_data.vibration if is_data_fresh(latest_live_data, self.data_freshness_threshold) else '-', "unit": "mm/s"},
-            "Temperatur": {"value": latest_raw_data['temperature'].value if is_data_fresh(latest_raw_data['temperature'], self.data_freshness_threshold) else '-', "unit": "°C"},
-            "Drehmoment": {"value": latest_raw_data['torque'].value if is_data_fresh(latest_raw_data['torque'], self.data_freshness_threshold) else '-', "unit": "Nm"},
+            "Temperatur": {
+                "value": latest_raw_data['temperature'].value if is_data_fresh(latest_raw_data['temperature'], self.data_freshness_threshold) else '-',
+                "unit": "°C",
+                "prediction": latest_prediction_data['temperature'].status_value if latest_prediction_data['temperature'] and is_data_fresh(latest_prediction_data['temperature'], self.data_freshness_threshold) else None
+            },
+            "Drehmoment": {
+                "value": latest_raw_data['torque'].value if is_data_fresh(latest_raw_data['torque'], self.data_freshness_threshold) else '-',
+                "unit": "Nm",
+                "prediction": latest_prediction_data['torque'].status_value if latest_prediction_data['torque'] and is_data_fresh(latest_prediction_data['torque'], self.data_freshness_threshold) else None
+            },
             "Laufzeit": {"value": latest_live_data.run_time if is_data_fresh(latest_live_data, self.data_freshness_threshold) else '-', "unit": "h"},
             "Anzahl eingefahren": {"value": retracted_count, "unit": ""},
             "Anzahl ausgefahren": {"value": extended_count, "unit": ""},
         }
+        # --- Ende der Anpassung ---
 
         digital_twin_data = {
             "Strom": {"value": latest_twin_data.current if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "A"},
@@ -444,7 +459,11 @@ class Command(BaseCommand):
         }
 
         dashboard_raw_data = {
-            metric: {'value': getattr(data, 'value', None) if is_data_fresh(data, self.data_freshness_threshold) else None, 'timestamp': getattr(data, 'timestamp', None)}
+            metric: {
+                'value': getattr(data, 'value', None) if is_data_fresh(data, self.data_freshness_threshold) else None,
+                'timestamp': getattr(data, 'timestamp', None),
+                'prediction': latest_prediction_data[metric].status_value if latest_prediction_data.get(metric) and is_data_fresh(latest_prediction_data[metric], self.data_freshness_threshold) else None
+            }
             for metric, data in latest_raw_data.items()
         }
         dashboard_feature_data = {
@@ -768,7 +787,12 @@ def _round_numeric_values_for_display(data_dict, decimal_places=2):
     for key, item in data_dict.items():
         if isinstance(item, dict):
             if 'value' in item and isinstance(item['value'], (int, float)):
-                rounded_data[key] = {**item, 'value': round(item['value'], decimal_places)}
+                # Behandle 'prediction' Feld, um es nicht zu runden
+                prediction_val = item.get('prediction')
+                rounded_value = round(item['value'], decimal_places)
+                rounded_data[key] = {**item, 'value': rounded_value}
+                if prediction_val is not None:
+                    rounded_data[key]['prediction'] = prediction_val
             elif 'mean' in item and 'min' in item: # Annahme Feature-Datenstruktur
                 rounded_item = {}
                 for sub_key, sub_value in item.items():
