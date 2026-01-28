@@ -33,7 +33,7 @@ class Command(BaseCommand):
         'torque': False,
     }
     # Schwellenwert für die Anzahl der aufeinanderfolgenden schlechten Vorhersagen, bevor ein FEHLER ausgelöst wird
-    PREDICTION_ERROR_THRESHOLD = 10
+    PREDICTION_ERROR_THRESHOLD = 5
 
     def add_arguments(self, parser):
         """
@@ -90,7 +90,7 @@ class Command(BaseCommand):
         self.topic_prediction_torque = options['topic_prediction_torque']
 
         # Initialisiert den Anomalie-Status für jede Metrik
-        metrics_to_compare = ['current', 'temp', 'torque']
+        metrics_to_compare = [] #'current', 'temp', 'torque'
         for metric_name in metrics_to_compare:
             self.last_anomaly_state[metric_name] = False
             # Initialisiert das Fehler-Aktiv-Flag für Vorhersagen

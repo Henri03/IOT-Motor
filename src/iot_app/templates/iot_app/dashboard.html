@@ -854,7 +854,6 @@
          */
         const getPointBackgroundColor = (prediction) => {
             if (prediction === -1) return 'rgba(255, 0, 0, 1)'; // Red for anomaly
-            // if (prediction === 1) return 'rgba(0, 150, 136, 1)'; // Teal for normal - not needed for raw points
             return 'rgba(0, 0, 255, 0.5)'; // Default blue for no prediction/neutral
         };
 
@@ -1231,7 +1230,7 @@
 
             // Initialize real motor current chart
             initializeChart('real-current-chart', 'Stromverlauf über die Zeit (mit Features)', [
-                { label: 'Strom (Raw)', borderColor: colors.raw, showLine: false, pointRadius: 1 }, // pointRadius set to 1
+                { label: 'Strom (Raw)', borderColor: colors.raw, showLine: true, pointRadius: 1 }, // Changed showLine to true
                 { label: 'Strom Mean', borderColor: colors.mean, borderWidth: 2, tension: 0.3, pointRadius: 0 },
                 { label: 'Strom Min', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2], pointRadius: 0 },
                 { label: 'Strom Max', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2], pointRadius: 0 },
@@ -1282,7 +1281,7 @@
             });
             // Initialize real motor temperature chart
             initializeChart('real-temp-chart', 'Temperaturverlauf über die Zeit (mit Features)', [
-                { label: 'Temperatur (Raw)', borderColor: colors.temperature, showLine: false, pointRadius: 1 }, // pointRadius set to 1
+                { label: 'Temperatur (Raw)', borderColor: colors.temperature, showLine: true, pointRadius: 1 }, // Changed showLine to true
                 { label: 'Temperatur Mean', borderColor: colors.mean, borderWidth: 2, tension: 0.3, pointRadius: 0 },
                 { label: 'Temperatur Min', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2], pointRadius: 0 },
                 { label: 'Temperatur Max', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2], pointRadius: 0 },
@@ -1298,7 +1297,7 @@
             });
             // Initialize real motor torque chart
             initializeChart('real-torque-chart', 'Drehmomentverlauf über die Zeit (mit Features)', [
-                { label: 'Drehmoment (Raw)', borderColor: colors.raw, showLine: false, pointRadius: 1 }, // pointRadius set to 1
+                { label: 'Drehmoment (Raw)', borderColor: colors.raw, showLine: true, pointRadius: 1 }, // Changed showLine to true
                 { label: 'Drehmoment Mean', borderColor: colors.mean, borderWidth: 2, tension: 0.3, pointRadius: 0 },
                 { label: 'Drehmoment Min', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2], pointRadius: 0 },
                 { label: 'Drehmoment Max', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2], pointRadius: 0 },
