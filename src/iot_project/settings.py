@@ -137,9 +137,9 @@ MQTT_TOPIC_LIVE = os.environ.get('MQTT_TOPIC_LIVE', 'iot/motor/live')           
                                                                                 # zweite Parameter 'iot/motor/live' ist der Standardwert (Default-Wert)
 MQTT_TOPIC_TWIN = os.environ.get('MQTT_TOPIC_TWIN', 'iot/motor/twin')
 
-FEATURE_TOPIC_RAW_TEMPERATURE = "raw/temperature"
-FEATURE_TOPIC_RAW_CURRENT = "raw/current"
-FEATURE_TOPIC_RAW_TORQUE = "raw/torque"
+TOPIC_RAW_TEMPERATURE = "raw/temperature"
+TOPIC_RAW_CURRENT = "raw/current"
+TOPIC_RAW_TORQUE = "raw/torque"
 
 TOPIC_RAW_VIBRATION_VIN = "Sensor/vin/vibration_raw"
 TOPIC_RAW_GPIO_RPM = "Sensor/gpio/rpm"

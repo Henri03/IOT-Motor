@@ -19,7 +19,8 @@ TOPIC_TWIN = "iot/motor/twin"
 TOPIC_RAW_TEMPERATURE = "raw/temperature"
 TOPIC_RAW_CURRENT = "raw/current"
 TOPIC_RAW_TORQUE = "raw/torque"
-# New topics added as per request
+TOPIC_RAW_VOLTAGE = "raw/voltage"  # New topic for raw voltage
+
 TOPIC_RAW_VIBRATION_VIN = "Sensor/vin/vibration_raw"
 TOPIC_RAW_GPIO_RPM = "Sensor/gpio/rpm"
 
@@ -49,7 +50,7 @@ def generate_live_data():
     
     # Introduce occasional "anomaly" for live data (e.g., higher current)
     if random.random() < 0.05: 
-        anomaly_type = random.choice(['current', 'vibration', 'temp', 'rpm', 'torque'])
+        anomaly_type = random.choice(['current', 'vibration', 'temp', 'rpm', 'torque', 'voltage']) # Added voltage to anomalies
         if anomaly_type == 'current':
             current += random.uniform(8.0, 15.0)
         elif anomaly_type == 'vibration':
@@ -60,6 +61,8 @@ def generate_live_data():
             rpm += random.uniform(100.0, 300.0)
         elif anomaly_type == 'torque':
             torque += random.uniform(20.0, 40.0)
+        elif anomaly_type == 'voltage': # Anomaly for voltage
+            voltage += random.uniform(10.0, 20.0)
         
         malfunction = True
         motor_state = "warning"
@@ -103,6 +106,8 @@ def generate_twin_data(live_data_payload):
         current = round(random.uniform(18.0, 22.0) + random.gauss(0, 0.2), 2)
 
     voltage = round(base_voltage + random.gauss(0, 0.5), 2)
+    # No specific twin adjustment for voltage based on live data in the original logic, keeping it consistent.
+    
     rpm = round(base_rpm + random.gauss(0, 2.0), 2)
     torque = round(base_torque + random.gauss(0, 1.0), 2)
     run_time = round(base_run_time + random.gauss(0, 5.0), 2)
@@ -218,6 +223,7 @@ def publish_data():
             raw_temp = live_data_payload.get('temp')
             raw_current = live_data_payload.get('current')
             raw_torque = live_data_payload.get('torque')
+            raw_voltage = live_data_payload.get('voltage') # Extract voltage for new topic
             raw_vibration = live_data_payload.get('vibration') # Extract vibration for new topic
             raw_rpm = live_data_payload.get('rpm') # Extract rpm for new topic
             
@@ -238,7 +244,11 @@ def publish_data():
                 client.publish(TOPIC_RAW_TORQUE, json.dumps(raw_torque_payload))
                 print(f"[MQTT] Sent → Topic: {TOPIC_RAW_TORQUE} | Payload: {json.dumps(raw_torque_payload)}")
             
-            # Publish new raw data topics
+            # Publish new raw data topics, including voltage
+            if raw_voltage is not None:
+                raw_voltage_payload = {"timestamp": current_timestamp_utc, "value": raw_voltage}
+                client.publish(TOPIC_RAW_VOLTAGE, json.dumps(raw_voltage_payload))
+                print(f"[MQTT] Sent → Topic: {TOPIC_RAW_VOLTAGE} | Payload: {json.dumps(raw_voltage_payload)}")
             if raw_vibration is not None:
                 # For Sensor/vin/vibration_raw, value should be an integer
                 raw_vibration_payload = {"timestamp": current_timestamp_utc, "value": int(raw_vibration * 10000)} # Example conversion to integer
