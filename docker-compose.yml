@@ -75,10 +75,13 @@ services:
       - /etc/timezone:/etc/timezone:ro
     environment:
       - TZ=Europe/Berlin
+      # Wichtig: Diese Umgebungsvariablen müssen auch an den Publisher weitergegeben werden
+      - DOCKER_MQTT_BROKER_HOST=${DOCKER_MQTT_BROKER_HOST}
+      - MQTT_BROKER_PORT=${MQTT_BROKER_PORT}
     env_file:
       - .env
     depends_on:
-      - mqtt_broker
+      - mqtt_broker # Sicherstellen, dass der Broker vor dem Publisher startet
     restart: unless-stopped
 
   mqtt_consumer:

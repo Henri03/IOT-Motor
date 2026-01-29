@@ -6,6 +6,7 @@ import datetime
 import os
 import statistics
 from pytz import utc # Import UTC timezone
+from collections import deque # Für den Datenpuffer
 
 # MQTT Broker settings
 BROKER_ADDRESS = os.getenv('DOCKER_MQTT_BROKER_HOST', 'localhost')
@@ -19,8 +20,7 @@ TOPIC_TWIN = "iot/motor/twin"
 TOPIC_RAW_TEMPERATURE = "raw/temperature"
 TOPIC_RAW_CURRENT = "raw/current"
 TOPIC_RAW_TORQUE = "raw/torque"
-TOPIC_RAW_VOLTAGE = "raw/voltage"  # New topic for raw voltage
-
+TOPIC_RAW_VOLTAGE = "raw/voltage"
 TOPIC_RAW_VIBRATION_VIN = "Sensor/vin/vibration_raw"
 TOPIC_RAW_GPIO_RPM = "Sensor/gpio/rpm"
 
@@ -33,6 +33,80 @@ TOPIC_FEATURE_TORQUE = "feature/torque"
 TOPIC_PREDICTION_TEMPERATURE = "prediction/temperature"
 TOPIC_PREDICTION_CURRENT = "prediction/current"
 TOPIC_PREDICTION_TORQUE = "prediction/torque"
+
+# --- Globale Puffer für Raw-Werte ---
+# Speichert die letzten N Werte für die Durchschnittsberechnung der Twin-Daten
+N_RAW_VALUES = 20 # Anzahl der letzten Raw-Werte, die für den Durchschnitt verwendet werden sollen
+
+raw_data_buffers = {
+    'temperature': deque(maxlen=N_RAW_VALUES),
+    'current': deque(maxlen=N_RAW_VALUES),
+    'torque': deque(maxlen=N_RAW_VALUES),
+    'voltage': deque(maxlen=N_RAW_VALUES),
+    'vibration': deque(maxlen=N_RAW_VALUES),
+    'rpm': deque(maxlen=N_RAW_VALUES),
+}
+
+# --- MQTT Client für den Publisher (zum Senden und Empfangen) ---
+publisher_client = None
+
+def on_connect_publisher(client, userdata, flags, rc, properties):
+    """Callback function for MQTT connection of the publisher."""
+    if rc == 0:
+        print("Publisher Connected to MQTT Broker!")
+        # Abonnieren der Raw-Topics, um auf Änderungen zu reagieren
+        client.subscribe(TOPIC_RAW_TEMPERATURE)
+        client.subscribe(TOPIC_RAW_CURRENT)
+        client.subscribe(TOPIC_RAW_TORQUE)
+        client.subscribe(TOPIC_RAW_VOLTAGE)
+        client.subscribe(TOPIC_RAW_VIBRATION_VIN)
+        client.subscribe(TOPIC_RAW_GPIO_RPM)
+        print("Publisher subscribed to raw data topics.")
+    else:
+        print(f"Publisher Connection failed, return code {rc}")
+
+def on_message_publisher(client, userdata, msg):
+    """Callback function for MQTT messages received by the publisher."""
+    try:
+        payload = json.loads(msg.payload.decode())
+        value = payload.get('value')
+        if value is None:
+            print(f"Received message on {msg.topic} without 'value' key: {payload}")
+            return
+
+        # Speichern der empfangenen Raw-Werte in den Puffern
+        if msg.topic == TOPIC_RAW_TEMPERATURE:
+            raw_data_buffers['temperature'].append(value)
+        elif msg.topic == TOPIC_RAW_CURRENT:
+            raw_data_buffers['current'].append(value)
+        elif msg.topic == TOPIC_RAW_TORQUE:
+            raw_data_buffers['torque'].append(value)
+        elif msg.topic == TOPIC_RAW_VOLTAGE:
+            raw_data_buffers['voltage'].append(value)
+        elif msg.topic == TOPIC_RAW_VIBRATION_VIN:
+            # Vibration VIN sendet int, umwandeln für Durchschnittsberechnung
+            raw_data_buffers['vibration'].append(value / 10000.0) # Korrekte Skalierung
+        elif msg.topic == TOPIC_RAW_GPIO_RPM:
+            raw_data_buffers['rpm'].append(value)
+        
+        # print(f"Publisher received and buffered: {msg.topic} -> {value}") # Kann bei Bedarf aktiviert werden
+
+    except json.JSONDecodeError:
+        print(f"Publisher: Failed to decode JSON from message: {msg.payload}")
+    except Exception as e:
+        print(f"Publisher: Error processing message on topic {msg.topic}: {e}")
+
+def get_average_from_buffer(metric_name, default_value, noise_std_dev=0.1):
+    """
+    Calculates the average of the buffered raw values for a given metric,
+    adding a small amount of Gaussian noise.
+    """
+    buffer = raw_data_buffers.get(metric_name)
+    if buffer and len(buffer) > 0:
+        # Füge Rauschen zum Durchschnitt hinzu
+        return statistics.mean(buffer) + random.gauss(0, noise_std_dev)
+    # Wenn der Puffer leer ist, verwende den Standardwert mit Rauschen
+    return default_value + random.gauss(0, noise_std_dev)
 
 def generate_live_data():
     """Generates realistic live sensor data."""
@@ -88,37 +162,31 @@ def generate_live_data():
     }
     return data
 
-def generate_twin_data(live_data_payload):
-    """Generates expected data from a behavioral model (digital twin)."""
+def generate_twin_data():
+    """
+    Generates expected data from a behavioral model (digital twin).
+    Twin data for existing raw features (temp, current, torque, voltage, vibration, rpm)
+    are based on the average of the last N raw values from the buffers.
+    For other features (run_time), they are still randomly generated.
+    """
     
-    # Base values for twin data
-    base_current = random.uniform(15.0, 20.0)
-    base_voltage = random.uniform(225.0, 235.0)
-    base_rpm = random.uniform(1440.0, 1460.0)
-    base_torque = random.uniform(60.0, 75.0)
-    base_run_time = random.uniform(100.0, 5000.0)
-    base_vibration = random.uniform(1.0, 3.0)
-    base_temp = random.uniform(40.0, 55.0)
+    # Use average of raw data from buffers for twin values
+    # Default values are used if buffers are not yet filled
+    current = round(get_average_from_buffer('current', random.uniform(15.0, 20.0), noise_std_dev=0.05), 2)
+    voltage = round(get_average_from_buffer('voltage', random.uniform(225.0, 235.0), noise_std_dev=0.1), 2)
+    rpm = round(get_average_from_buffer('rpm', random.uniform(1440.0, 1460.0), noise_std_dev=0.5), 2)
+    # Angepasster default_value für Vibration, um den Bereich der Live-Daten zu matchen
+    # WICHTIG: Der hier berechnete Wert ist noch im Bereich 0.5-5.0
+    vibration_calculated = get_average_from_buffer('vibration', random.uniform(0.5, 5.0), noise_std_dev=0.01) 
+    # Für die Darstellung im Plot muss der Twin-Vibrationswert ebenfalls mit 10000 multipliziert werden
+    vibration = round(vibration_calculated * 10000, 2) 
 
-    # Adjust twin values based on live values to simulate realistic deviations
-    current = round(base_current + random.gauss(0, 0.2), 2)
-    if live_data_payload.get('current') is not None and live_data_payload['current'] > 30:
-        current = round(random.uniform(18.0, 22.0) + random.gauss(0, 0.2), 2)
-
-    voltage = round(base_voltage + random.gauss(0, 0.5), 2)
-    # No specific twin adjustment for voltage based on live data in the original logic, keeping it consistent.
+    temp = round(get_average_from_buffer('temperature', random.uniform(40.0, 55.0), noise_std_dev=0.1), 2)
+    torque = round(get_average_from_buffer('torque', random.uniform(60.0, 75.0), noise_std_dev=0.2), 2)
     
-    rpm = round(base_rpm + random.gauss(0, 2.0), 2)
-    torque = round(base_torque + random.gauss(0, 1.0), 2)
-    run_time = round(base_run_time + random.gauss(0, 5.0), 2)
-
-    vibration = round(base_vibration + random.gauss(0, 0.1), 2)
-    if live_data_payload.get('vibration') is not None and live_data_payload['vibration'] > 10:
-        vibration = round(random.uniform(3.0, 6.0) + random.gauss(0, 0.1), 2)
-
-    temp = round(base_temp + random.gauss(0, 0.5), 2)
-    if live_data_payload.get('temp') is not None and live_data_payload['temp'] > 70:
-        temp = round(random.uniform(50.0, 70.0) + random.gauss(0, 0.5), 2)
+    # For run_time, which doesn't have a direct raw counterpart in your current setup,
+    # we keep it randomly generated.
+    run_time = round(random.uniform(100.0, 5000.0) + random.gauss(0, 5.0), 2)
 
     # Ensure timestamp is UTC and timezone-aware
     timestamp_utc = datetime.datetime.now(utc).isoformat()
@@ -128,7 +196,7 @@ def generate_twin_data(live_data_payload):
         "current": current,
         "voltage": voltage,
         "rpm": rpm,
-        "vibration": vibration,
+        "vibration": vibration, # Dieser Wert ist nun mit 10000 multipliziert
         "temp": temp,
         "torque": torque,
         "run_time": run_time,
@@ -174,129 +242,116 @@ def generate_prediction_data_dummy(metric_value):
     if random.random() < 0.04:  # % chance of a 'bad' prediction (-1)
         status = -1
     
-    # Only check thresholds if status is not already -1 from the random chance.
-    # This ensures that -1 predictions remain rare.
-    #if status == 1: 
-    #    if "temp" in TOPIC_PREDICTION_TEMPERATURE and metric_value > 75: # Higher threshold for bad
-     #       status = -1
-      #  elif "current" in TOPIC_PREDICTION_CURRENT and metric_value > 22: # Higher threshold for bad
-       #     status = -1
-        #elif "torque" in TOPIC_PREDICTION_TORQUE and metric_value > 85: # Higher threshold for bad
-         #   status = -1
-
     prediction = {
         "value": status
     }
     return prediction
 
-def on_connect(client, userdata, flags, rc, properties):
-    """Callback function for MQTT connection."""
-    if rc == 0:
-        print("Connected to MQTT Broker!")
-    else:
-        print(f"Connection failed, return code {rc}")
-
 def publish_data():
     """Initializes MQTT client and publishes dummy data."""
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2) 
-    client.on_connect = on_connect
-    client.connect(BROKER_ADDRESS, BROKER_PORT, 60)
-    client.loop_start()
+    global publisher_client
+    publisher_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2) 
+    publisher_client.on_connect = on_connect_publisher
+    publisher_client.on_message = on_message_publisher # Set the message callback
+    publisher_client.connect(BROKER_ADDRESS, BROKER_PORT, 60)
+    publisher_client.loop_start() # Start the loop in a background thread for receiving messages
 
     print(f"Publishing dummy data to {TOPIC_LIVE}, {TOPIC_TWIN}, raw, feature, and prediction topics for the motor...")
 
     try:
         while True:
-            # Generate Live and Twin Data
+            # Generate Live Data (still needed for raw/feature/prediction topics for now)
             live_data_payload = generate_live_data()
-            twin_data_payload = generate_twin_data(live_data_payload)
 
-            # Publish Live Data 
-            #client.publish(TOPIC_LIVE, json.dumps(live_data_payload))
-            #print(f"[MQTT] Sent → Topic: {TOPIC_LIVE} | Payload: {json.dumps(live_data_payload)}")
+            # Generate Twin Data - now independent of live_data_payload
+            twin_data_payload = generate_twin_data() 
+
+            # Publish Live Data (can be commented out later if raw data comes from external source)
+            publisher_client.publish(TOPIC_LIVE, json.dumps(live_data_payload))
+            print(f"[MQTT] Sent → Topic: {TOPIC_LIVE} | Payload: {json.dumps(live_data_payload)}")
 
              # Publish Twin Data 
-            client.publish(TOPIC_TWIN, json.dumps(twin_data_payload))
+            publisher_client.publish(TOPIC_TWIN, json.dumps(twin_data_payload))
             print(f"[MQTT] Sent → Topic: {TOPIC_TWIN} | Payload: {json.dumps(twin_data_payload)}")
 
             # Extract relevant values for Raw Data
+            # These values are currently from generate_live_data(), but in a real scenario
+            # they would come from actual sensors and be published by a different service.
             raw_temp = live_data_payload.get('temp')
             raw_current = live_data_payload.get('current')
             raw_torque = live_data_payload.get('torque')
-            raw_voltage = live_data_payload.get('voltage') # Extract voltage for new topic
-            raw_vibration = live_data_payload.get('vibration') # Extract vibration for new topic
-            raw_rpm = live_data_payload.get('rpm') # Extract rpm for new topic
+            raw_voltage = live_data_payload.get('voltage')
+            raw_vibration = live_data_payload.get('vibration')
+            raw_rpm = live_data_payload.get('rpm')
             
             # Use a single timestamp for raw, feature, and prediction data to ensure they are the same
             current_timestamp_utc = datetime.datetime.now(utc).isoformat()
 
             # Publish Raw Data
+            # These are the topics the publisher itself subscribes to for its twin data calculation
             if raw_temp is not None:
                 raw_temp_payload = {"timestamp": current_timestamp_utc, "value": raw_temp}
-                client.publish(TOPIC_RAW_TEMPERATURE, json.dumps(raw_temp_payload))
+                publisher_client.publish(TOPIC_RAW_TEMPERATURE, json.dumps(raw_temp_payload))
                 print(f"[MQTT] Sent → Topic: {TOPIC_RAW_TEMPERATURE} | Payload: {json.dumps(raw_temp_payload)}")
             if raw_current is not None:
                 raw_current_payload = {"timestamp": current_timestamp_utc, "value": raw_current}
-                client.publish(TOPIC_RAW_CURRENT, json.dumps(raw_current_payload))
+                publisher_client.publish(TOPIC_RAW_CURRENT, json.dumps(raw_current_payload))
                 print(f"[MQTT] Sent → Topic: {TOPIC_RAW_CURRENT} | Payload: {json.dumps(raw_current_payload)}")
             if raw_torque is not None:
                 raw_torque_payload = {"timestamp": current_timestamp_utc, "value": raw_torque}
-                client.publish(TOPIC_RAW_TORQUE, json.dumps(raw_torque_payload))
+                publisher_client.publish(TOPIC_RAW_TORQUE, json.dumps(raw_torque_payload))
                 print(f"[MQTT] Sent → Topic: {TOPIC_RAW_TORQUE} | Payload: {json.dumps(raw_torque_payload)}")
             
-            # Publish new raw data topics, including voltage
             if raw_voltage is not None:
                 raw_voltage_payload = {"timestamp": current_timestamp_utc, "value": raw_voltage}
-                client.publish(TOPIC_RAW_VOLTAGE, json.dumps(raw_voltage_payload))
+                publisher_client.publish(TOPIC_RAW_VOLTAGE, json.dumps(raw_voltage_payload))
                 print(f"[MQTT] Sent → Topic: {TOPIC_RAW_VOLTAGE} | Payload: {json.dumps(raw_voltage_payload)}")
             if raw_vibration is not None:
-                # For Sensor/vin/vibration_raw, value should be an integer
-                raw_vibration_payload = {"timestamp": current_timestamp_utc, "value": int(raw_vibration * 10000)} # Example conversion to integer
-                client.publish(TOPIC_RAW_VIBRATION_VIN, json.dumps(raw_vibration_payload))
+                raw_vibration_payload = {"timestamp": current_timestamp_utc, "value": int(raw_vibration * 10000)}
+                publisher_client.publish(TOPIC_RAW_VIBRATION_VIN, json.dumps(raw_vibration_payload))
                 print(f"[MQTT] Sent → Topic: {TOPIC_RAW_VIBRATION_VIN} | Payload: {json.dumps(raw_vibration_payload)}")
             if raw_rpm is not None:
                 raw_rpm_payload = {"timestamp": current_timestamp_utc, "value": raw_rpm}
-                client.publish(TOPIC_RAW_GPIO_RPM, json.dumps(raw_rpm_payload))
+                publisher_client.publish(TOPIC_RAW_GPIO_RPM, json.dumps(raw_rpm_payload))
                 print(f"[MQTT] Sent → Topic: {TOPIC_RAW_GPIO_RPM} | Payload: {json.dumps(raw_rpm_payload)}")
 
             # Publish Feature Data (using live data values as a base for feature calculation)
             if raw_temp is not None:
-                feature_temp_payload = generate_feature_data_dummy(raw_temp, current_timestamp_utc) # Pass timestamp
-                client.publish(TOPIC_FEATURE_TEMPERATURE, json.dumps(feature_temp_payload))
+                feature_temp_payload = generate_feature_data_dummy(raw_temp, current_timestamp_utc)
+                publisher_client.publish(TOPIC_FEATURE_TEMPERATURE, json.dumps(feature_temp_payload))
                 print(f"[MQTT] Sent → Topic: {TOPIC_FEATURE_TEMPERATURE} | Payload: {json.dumps(feature_temp_payload)}")
             if raw_current is not None:
-                feature_current_payload = generate_feature_data_dummy(raw_current, current_timestamp_utc) # Pass timestamp
-                client.publish(TOPIC_FEATURE_CURRENT, json.dumps(feature_current_payload))
+                feature_current_payload = generate_feature_data_dummy(raw_current, current_timestamp_utc)
+                publisher_client.publish(TOPIC_FEATURE_CURRENT, json.dumps(feature_current_payload))
                 print(f"[MQTT] Sent → Topic: {TOPIC_FEATURE_CURRENT} | Payload: {json.dumps(feature_current_payload)}")
             if raw_torque is not None:
-                feature_torque_payload = generate_feature_data_dummy(raw_torque, current_timestamp_utc) # Pass timestamp
-                client.publish(TOPIC_FEATURE_TORQUE, json.dumps(feature_torque_payload))
+                feature_torque_payload = generate_feature_data_dummy(raw_torque, current_timestamp_utc)
+                publisher_client.publish(TOPIC_FEATURE_TORQUE, json.dumps(feature_torque_payload))
                 print(f"[MQTT] Sent → Topic: {TOPIC_FEATURE_TORQUE} | Payload: {json.dumps(feature_torque_payload)}")
 
             # Publish Prediction Data (using live data values as a base for prediction)
-            # The timestamp for prediction must be the same as for raw data
             if raw_temp is not None:
                 prediction_temp_payload_value = generate_prediction_data_dummy(raw_temp)
                 prediction_temp_payload = {"timestamp": current_timestamp_utc, "value": prediction_temp_payload_value["value"]}
-                client.publish(TOPIC_PREDICTION_TEMPERATURE, json.dumps(prediction_temp_payload))
+                publisher_client.publish(TOPIC_PREDICTION_TEMPERATURE, json.dumps(prediction_temp_payload))
                 print(f"[MQTT] Sent → Topic: {TOPIC_PREDICTION_TEMPERATURE} | Payload: {json.dumps(prediction_temp_payload)}")
             if raw_current is not None:
                 prediction_current_payload_value = generate_prediction_data_dummy(raw_current)
                 prediction_current_payload = {"timestamp": current_timestamp_utc, "value": prediction_current_payload_value["value"]}
-                client.publish(TOPIC_PREDICTION_CURRENT, json.dumps(prediction_current_payload))
+                publisher_client.publish(TOPIC_PREDICTION_CURRENT, json.dumps(prediction_current_payload))
                 print(f"[MQTT] Sent → Topic: {TOPIC_PREDICTION_CURRENT} | Payload: {json.dumps(prediction_current_payload)}")
             if raw_torque is not None:
                 prediction_torque_payload_value = generate_prediction_data_dummy(raw_torque)
                 prediction_torque_payload = {"timestamp": current_timestamp_utc, "value": prediction_torque_payload_value["value"]}
-                client.publish(TOPIC_PREDICTION_TORQUE, json.dumps(prediction_torque_payload))
+                publisher_client.publish(TOPIC_PREDICTION_TORQUE, json.dumps(prediction_torque_payload))
                 print(f"[MQTT] Sent → Topic: {TOPIC_PREDICTION_TORQUE} | Payload: {json.dumps(prediction_torque_payload)}")
 
             time.sleep(5) # Publish every 5 seconds
     except KeyboardInterrupt:
         print("Publisher stopped.")
     finally:
-        client.loop_stop()
-        client.disconnect()
+        publisher_client.loop_stop()
+        publisher_client.disconnect()
 
 if __name__ == "__main__":
     publish_data()

@@ -480,7 +480,7 @@
                         <div class="data-item"><strong>Temperatur:</strong> <span id="expected-temperatur">{{ digital_twin_data.Temperature.value|default:'N/A' }} {{ digital_twin_data.Temperature.unit }}</span></div>
                         <div class="data-item"><strong>Drehmoment:</strong> <span id="expected-drehmoment">{{ digital_twin_data.Torque.value|default:'N/A' }} {{ digital_twin_data.Torque.unit }}</span></div>
                         <div class="data-item"><strong>Anzahl eingefahren:</strong> <span id="expected-anzahl-eingefahren">{{ digital_twin_data.Anzahl_eingefahren.value|default:'N/A' }}</span></div>
-                        <div class="data-item"><strong>Anzahl ausgefahren:</strong> <span id="expected-anzahl-ausgefahren">{{ digital_twin_data.Anzahl_ausgefahren.value|default:'N/A' }}</span></div>
+                        <div class="data-item"><strong>Anzahl ausgefahren:</strong> <span id="expected-anzahl-ausgefahren">{{ real_motor_data.Anzahl_ausgefahren.value|default:'N/A' }}</span></div>
                         <div class="data-item"><strong>Motorzustand:</strong> <span id="expected-motorzustand">{{ digital_twin_data.Motorzustand.value|default:'N/A' }}</span></div>
                     </div>
                 </div>
@@ -1255,7 +1255,7 @@
             // Initialize real motor current chart
             initializeChart('real-current-chart', 'Stromverlauf über die Zeit (mit Features)', [
                 { label: 'Strom (Raw)', borderColor: colors.raw, showLine: true },
-                { label: 'Strom Mean', borderColor: colors.mean, borderWidth: 2, tension: 0.3, pointRadius: 0 },
+                { label: 'Strom Mean', borderColor: colors.mean, borderWidth: 1, borderDash: [2, 2], tension: 0.3, pointRadius: 0 },
                 { label: 'Strom Min', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2], pointRadius: 0 },
                 { label: 'Strom Max', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2], pointRadius: 0 },
                 { label: 'Strom Median', borderColor: colors.median, borderWidth: 1, borderDash: [5, 5], pointRadius: 0 },
@@ -1306,7 +1306,7 @@
             // Initialize real motor temperature chart
             initializeChart('real-temp-chart', 'Temperaturverlauf über die Zeit (mit Features)', [
                 { label: 'Temperatur (Raw)', borderColor: colors.temperature, showLine: true },
-                { label: 'Temperatur Mean', borderColor: colors.mean, borderWidth: 2, tension: 0.3, pointRadius: 0 },
+                { label: 'Temperatur Mean', borderColor: colors.mean, borderWidth: 2,  borderDash: [2, 2],tension: 0.3, pointRadius: 0 },
                 { label: 'Temperatur Min', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2], pointRadius: 0 },
                 { label: 'Temperatur Max', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2], pointRadius: 0 },
                 { label: 'Temperatur Median', borderColor: colors.median, borderWidth: 1, borderDash: [5, 5], pointRadius: 0 },
@@ -1322,7 +1322,7 @@
             // Initialize real motor torque chart
             initializeChart('real-torque-chart', 'Drehmomentverlauf über die Zeit (mit Features)', [
                 { label: 'Drehmoment (Raw)', borderColor: colors.raw, showLine: true },
-                { label: 'Drehmoment Mean', borderColor: colors.mean, borderWidth: 2, tension: 0.3, pointRadius: 0 },
+                { label: 'Drehmoment Mean', borderColor: colors.mean, borderWidth: 2, borderDash: [2, 2], tension: 0.3, pointRadius: 0 },
                 { label: 'Drehmoment Min', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2], pointRadius: 0 },
                 { label: 'Drehmoment Max', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2], pointRadius: 0 },
                 { label: 'Drehmoment Median', borderColor: colors.median, borderWidth: 1, borderDash: [5, 5], pointRadius: 0 },

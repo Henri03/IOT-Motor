@@ -141,6 +141,8 @@ TOPIC_RAW_TEMPERATURE = "raw/temperature"
 TOPIC_RAW_CURRENT = "raw/current"
 TOPIC_RAW_TORQUE = "raw/torque"
 
+TOPIC_RAW_VOLTAGE = "raw/voltage"
+
 TOPIC_RAW_VIBRATION_VIN = "Sensor/vin/vibration_raw"
 TOPIC_RAW_GPIO_RPM = "Sensor/gpio/rpm"
 
