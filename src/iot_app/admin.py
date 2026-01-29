@@ -1,6 +1,6 @@
 # IOT_PROJECT/src/iot_app/admin.py
 from django.contrib import admin
-from .models import MotorInfo, LiveData, TwinData, ReferenceRun, MalfunctionLog, RawData, FeatureData, PredictionData
+from .models import MotorInfo, LiveData, TwinData, MalfunctionLog, RawData, FeatureData, PredictionData
 
 @admin.register(MotorInfo)
 class MotorInfoAdmin(admin.ModelAdmin):

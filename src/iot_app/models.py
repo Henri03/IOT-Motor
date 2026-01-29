@@ -66,29 +66,6 @@ class TwinData(models.Model):
         verbose_name_plural = "Twin Data"
         ordering = ['-timestamp']
 
-class ReferenceRun(models.Model):
-    """
-    Model for storing reference runs or setpoints for the motor.
-    """
-    name = models.CharField(max_length=100, verbose_name="Reference Run Name")
-    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="Timestamp")
-    is_valid = models.BooleanField(default=True, verbose_name="Is Valid")
-    current = models.FloatField(null=True, blank=True, verbose_name="Current (A)")
-    voltage = models.FloatField(null=True, blank=True, verbose_name="Voltage (V)")
-    rpm = models.FloatField(null=True, blank=True, verbose_name="RPM")
-    vibration = models.FloatField(null=True, blank=True, verbose_name="Vibration (mm/s)")
-    temp = models.FloatField(null=True, blank=True, verbose_name="Temperature (°C)")
-    torque = models.FloatField(null=True, blank=True, verbose_name="Torque (Nm)")
-    run_time = models.FloatField(null=True, blank=True, verbose_name="Run Time (h)")
-
-    def __str__(self):
-        return f"Reference Run '{self.name}' at {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
-
-    class Meta:
-        verbose_name = "Reference Run"
-        verbose_name_plural = "Reference Runs"
-        ordering = ['-timestamp']
-
 class MalfunctionLog(models.Model):
     """
     Model for storing malfunction messages and events.
@@ -113,7 +90,7 @@ class MalfunctionLog(models.Model):
             'WARNING': 'log-warning',
             'ERROR': 'log-error'
         }.get(self.message_type, '')
-    
+
     def __str__(self):
         return f"[{self.message_type}] {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')} - {self.description}"
 
@@ -121,7 +98,6 @@ class MalfunctionLog(models.Model):
         verbose_name = "Malfunction Log"
         verbose_name_plural = "Malfunction Logs"
         ordering = ['-timestamp']
-
 
 class RawData(models.Model):
     """
@@ -131,7 +107,8 @@ class RawData(models.Model):
         ('temperature', 'Temperatur'),
         ('current', 'Strom'),
         ('torque', 'Drehmoment'),
-        # Weitere Metriken können hier hinzugefügt werden
+        ('vibration_vin', 'Vibration (VIN)'), # Neu hinzugefügt
+        ('gpio_rpm', 'Drehzahl (GPIO)'),     # Neu hinzugefügt
     ]
     timestamp = models.DateTimeField(default=timezone.now, verbose_name="Zeitstempel")
     metric_type = models.CharField(max_length=50, choices=METRIC_TYPE_CHOICES, verbose_name="Metrik-Typ")

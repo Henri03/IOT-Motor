@@ -3,7 +3,7 @@
 # Websocket
 # Defines the DashboardConsumer, which is responsible for handling WebSocket connections for a real-time dashboard.
 # This script enables bidirectional communication between the frontend (web browser) and the backend (Django application) via WebSockets to display and update data in real time.
-# The DashboardConsumer is a central component for providing an interactive and dynamic dashboard.
+# The DashboardConsumer is a central component for providing an an interactive and dynamic dashboard.
 
 import json                                                                                 # Serialization and deserialization of data in JSON format
 from channels.generic.websocket import AsyncWebsocketConsumer                               # Basic structure and methods for WebSocket communication

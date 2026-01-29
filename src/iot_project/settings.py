@@ -141,6 +141,9 @@ FEATURE_TOPIC_RAW_TEMPERATURE = "raw/temperature"
 FEATURE_TOPIC_RAW_CURRENT = "raw/current"
 FEATURE_TOPIC_RAW_TORQUE = "raw/torque"
 
+TOPIC_RAW_VIBRATION_VIN = "Sensor/vin/vibration_raw"
+TOPIC_RAW_GPIO_RPM = "Sensor/gpio/rpm"
+
 FEATURE_TOPIC_TEMPERATURE = "feature/temperature"
 FEATURE_TOPIC_CURRENT = "feature/current"
 FEATURE_TOPIC_TORQUE = "feature/torque"

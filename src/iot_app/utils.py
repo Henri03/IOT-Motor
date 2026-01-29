@@ -39,7 +39,6 @@ def get_latest_live_data():
 def get_latest_digital_twin():
     """
     Retrieves the latest Digital Twin (TwinData) data and returns it in a standardized format.
-    This replaces the previous ReferenceRun usage.
     Returns all expected keys, even if no data is available.
     """
 
@@ -66,13 +65,15 @@ def get_latest_digital_twin():
 
 def get_latest_raw_data_for_dashboard():
     """
-    Retrieves the latest raw data for temperature, current, and torque.
+    Retrieves the latest raw data for temperature, current, torque, vibration_vin, and gpio_rpm.
     Returns a dictionary formatted for the dashboard.
     """
     latest_raw_data = {
         'temperature': RawData.objects.filter(metric_type='temperature').order_by('-timestamp').first(),
         'current': RawData.objects.filter(metric_type='current').order_by('-timestamp').first(),
         'torque': RawData.objects.filter(metric_type='torque').order_by('-timestamp').first(),
+        'vibration_vin': RawData.objects.filter(metric_type='vibration_vin').order_by('-timestamp').first(),
+        'gpio_rpm': RawData.objects.filter(metric_type='gpio_rpm').order_by('-timestamp').first(),
     }
     dashboard_raw_data = {
         metric: {'value': getattr(data, 'value', None), 'unit': '', 'timestamp': getattr(data, 'timestamp', None)} # Added 'unit' and 'timestamp'
@@ -82,6 +83,8 @@ def get_latest_raw_data_for_dashboard():
     if dashboard_raw_data['temperature']['value'] is not None: dashboard_raw_data['temperature']['unit'] = '°C'
     if dashboard_raw_data['current']['value'] is not None: dashboard_raw_data['current']['unit'] = 'A'
     if dashboard_raw_data['torque']['value'] is not None: dashboard_raw_data['torque']['unit'] = 'Nm'
+    if dashboard_raw_data['vibration_vin']['value'] is not None: dashboard_raw_data['vibration_vin']['unit'] = 'mm/s'
+    if dashboard_raw_data['gpio_rpm']['value'] is not None: dashboard_raw_data['gpio_rpm']['unit'] = 'U/min'
 
     return dashboard_raw_data
 
@@ -164,7 +167,7 @@ def get_dashboard_data():
 
     # Get latest LiveData for Voltage, RPM, Vibration, and as fallback for others
     live_data = get_latest_live_data()
-    # Get latest RawData for Current, Temperature, Torque (priority)
+    # Get latest RawData for Current, Temperature, Torque, Vibration VIN, GPIO RPM (priority)
     raw_data_panel = get_latest_raw_data_for_dashboard()
 
     # Determine motor state
@@ -190,8 +193,8 @@ def get_dashboard_data():
         'Motorzustand': {'value': motor_state, 'unit': ''},
         'Strom': raw_data_panel['current'] if raw_data_panel['current']['value'] is not None else live_data['Strom'],
         'Spannung': live_data['Spannung'],
-        'Drehzahl': live_data['Drehzahl'],
-        'Vibration': live_data['Vibration'],
+        'Drehzahl': raw_data_panel['gpio_rpm'] if raw_data_panel['gpio_rpm']['value'] is not None else live_data['Drehzahl'],
+        'Vibration': raw_data_panel['vibration_vin'] if raw_data_panel['vibration_vin']['value'] is not None else live_data['Vibration'],
         'Temperatur': raw_data_panel['temperature'] if raw_data_panel['temperature']['value'] is not None else live_data['Temperatur'],
         'Drehmoment': raw_data_panel['torque'] if raw_data_panel['torque']['value'] is not None else live_data['Drehmoment'],
         'Laufzeit': live_data['Laufzeit'], # Assuming run_time is only in LiveData
@@ -333,7 +336,7 @@ def get_plot_data(start_time=None, end_time=None):
             'current': [], 'voltage': [], 'rpm': [], 'vibration': [], 'temp': [], 'torque': []
         },
         'raw': {
-            'temperature': [], 'current': [], 'torque': []
+            'temperature': [], 'current': [], 'torque': [], 'vibration_vin': [], 'gpio_rpm': []
         },
         'feature': {
             'temperature_mean': [], 'temperature_min': [], 'temperature_max': [], 'temperature_median': [], 'temperature_std': [],
@@ -384,6 +387,8 @@ def get_plot_data(start_time=None, end_time=None):
         if entry.metric_type == 'temperature' and entry.value is not None: plot_data['raw']['temperature'].append(point)
         if entry.metric_type == 'current' and entry.value is not None: plot_data['raw']['current'].append(point)
         if entry.metric_type == 'torque' and entry.value is not None: plot_data['raw']['torque'].append(point)
+        if entry.metric_type == 'vibration_vin' and entry.value is not None: plot_data['raw']['vibration_vin'].append(point)
+        if entry.metric_type == 'gpio_rpm' and entry.value is not None: plot_data['raw']['gpio_rpm'].append(point)
 
     # Process FeatureData
     for entry in feature_data_queryset:
@@ -431,6 +436,8 @@ def get_latest_plot_data_point():
     latest_raw_temp = RawData.objects.filter(metric_type='temperature').order_by('-timestamp').first()
     latest_raw_current = RawData.objects.filter(metric_type='current').order_by('-timestamp').first()
     latest_raw_torque = RawData.objects.filter(metric_type='torque').order_by('-timestamp').first()
+    latest_raw_vibration_vin = RawData.objects.filter(metric_type='vibration_vin').order_by('-timestamp').first()
+    latest_raw_gpio_rpm = RawData.objects.filter(metric_type='gpio_rpm').order_by('-timestamp').first()
 
     # Get latest feature data points for each metric type
     latest_feature_temp = FeatureData.objects.filter(metric_type='temperature').order_by('-timestamp').first()
@@ -481,6 +488,14 @@ def get_latest_plot_data_point():
         ts = latest_raw_torque.timestamp.isoformat()
         prediction_status = latest_prediction_torque.status_value if latest_prediction_torque and latest_prediction_torque.timestamp == latest_raw_torque.timestamp else None
         if latest_raw_torque.value is not None: data_point['raw']['torque'] = {'x': ts, 'y': latest_raw_torque.value, 'prediction': prediction_status}
+    if latest_raw_vibration_vin:
+        ts = latest_raw_vibration_vin.timestamp.isoformat()
+        # No prediction for vibration_vin yet, so prediction_status is None
+        if latest_raw_vibration_vin.value is not None: data_point['raw']['vibration_vin'] = {'x': ts, 'y': latest_raw_vibration_vin.value, 'prediction': None}
+    if latest_raw_gpio_rpm:
+        ts = latest_raw_gpio_rpm.timestamp.isoformat()
+        # No prediction for gpio_rpm yet, so prediction_status is None
+        if latest_raw_gpio_rpm.value is not None: data_point['raw']['gpio_rpm'] = {'x': ts, 'y': latest_raw_gpio_rpm.value, 'prediction': None}
 
     if latest_feature_temp:
         ts = latest_feature_temp.timestamp.isoformat()

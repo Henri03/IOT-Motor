@@ -55,6 +55,9 @@ class Command(BaseCommand):
         parser.add_argument('--topic_raw_temperature', type=str, default=getattr(settings, 'MQTT_TOPIC_RAW_TEMPERATURE', "raw/temperature"), help='MQTT Topic für Rohdaten Temperatur')
         parser.add_argument('--topic_raw_current', type=str, default=getattr(settings, 'MQTT_TOPIC_RAW_CURRENT', "raw/current"), help='MQTT Topic für Rohdaten Strom')
         parser.add_argument('--topic_raw_torque', type=str, default=getattr(settings, 'MQTT_TOPIC_RAW_TORQUE', "raw/torque"), help='MQTT Topic für Rohdaten Drehmoment')
+        # Neue Topics für Rohdaten
+        parser.add_argument('--topic_raw_vibration_vin', type=str, default=getattr(settings, 'TOPIC_RAW_VIBRATION_VIN', "Sensor/vin/vibration_raw"), help='MQTT Topic für Rohdaten Vibration VIN')
+        parser.add_argument('--topic_raw_gpio_rpm', type=str, default=getattr(settings, 'TOPIC_RAW_GPIO_RPM', "Sensor/gpio/rpm"), help='MQTT Topic für Rohdaten GPIO RPM')
 
         parser.add_argument('--topic_feature_temperature', type=str, default=getattr(settings, 'MQTT_TOPIC_FEATURE_TEMPERATURE', "feature/temperature"), help='MQTT Topic für Feature-Daten Temperatur')
         parser.add_argument('--topic_feature_current', type=str, default=getattr(settings, 'MQTT_TOPIC_FEATURE_CURRENT', "feature/current"), help='MQTT Topic für Feature-Daten Strom')
@@ -82,6 +85,9 @@ class Command(BaseCommand):
         self.topic_raw_temperature = options['topic_raw_temperature']
         self.topic_raw_current = options['topic_raw_current']
         self.topic_raw_torque = options['topic_raw_torque']
+        # Neue Topics
+        self.topic_raw_vibration_vin = options['topic_raw_vibration_vin']
+        self.topic_raw_gpio_rpm = options['topic_raw_gpio_rpm']
 
         self.topic_feature_temperature = options['topic_feature_temperature']
         self.topic_feature_current = options['topic_feature_current']
@@ -96,7 +102,7 @@ class Command(BaseCommand):
         for metric_name in metrics_to_compare:
             self.last_anomaly_state[metric_name] = False
             # Initialisiert das Fehler-Aktiv-Flag für Vorhersagen
-            self.error_active_flags[metric_name] = False 
+            self.error_active_flags[metric_name] = False
 
         self.stdout.write(self.style.SUCCESS(f"Starte MQTT-Consumer für den Motor"))
         self.stdout.write(self.style.SUCCESS(f"Verbinde mit MQTT-Broker: {self.broker_address}:{self.port}"))
@@ -106,7 +112,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Abonniere Störungswarnung-Topic: {self.topic_malfunction_warning}"))
         self.stdout.write(self.style.SUCCESS(f"Abonniere Störungsfehler-Topic: {self.topic_malfunction_error}"))
 
-        self.stdout.write(self.style.SUCCESS(f"Abonniere Rohdaten-Topics: {self.topic_raw_temperature}, {self.topic_raw_current}, {self.topic_raw_torque}"))
+        self.stdout.write(self.style.SUCCESS(f"Abonniere Rohdaten-Topics: {self.topic_raw_temperature}, {self.topic_raw_current}, {self.topic_raw_torque}, {self.topic_raw_vibration_vin}, {self.topic_raw_gpio_rpm}"))
         self.stdout.write(self.style.SUCCESS(f"Abonniere Feature-Topics: {self.topic_feature_temperature}, {self.topic_feature_current}, {self.topic_feature_torque}"))
         self.stdout.write(self.style.SUCCESS(f"Abonniere Vorhersage-Topics: {self.topic_prediction_temperature}, {self.topic_prediction_current}, {self.topic_prediction_torque}"))
 
@@ -144,6 +150,10 @@ class Command(BaseCommand):
             client.subscribe(command_instance.topic_raw_temperature)
             client.subscribe(command_instance.topic_raw_current)
             client.subscribe(command_instance.topic_raw_torque)
+            # Neue Topics abonnieren
+            client.subscribe(command_instance.topic_raw_vibration_vin)
+            client.subscribe(command_instance.topic_raw_gpio_rpm)
+
             client.subscribe(command_instance.topic_feature_temperature)
             client.subscribe(command_instance.topic_feature_current)
             client.subscribe(command_instance.topic_feature_torque)
@@ -189,6 +199,12 @@ class Command(BaseCommand):
                 await command_instance._handle_raw_data(msg.topic, payload, 'current')
             elif msg.topic == command_instance.topic_raw_torque:
                 await command_instance._handle_raw_data(msg.topic, payload, 'torque')
+            # Neue Rohdaten-Topics
+            elif msg.topic == command_instance.topic_raw_vibration_vin:
+                await command_instance._handle_raw_data(msg.topic, payload, 'vibration_vin')
+            elif msg.topic == command_instance.topic_raw_gpio_rpm:
+                await command_instance._handle_raw_data(msg.topic, payload, 'gpio_rpm')
+
             elif msg.topic == command_instance.topic_feature_temperature:
                 await command_instance._handle_feature_data(msg.topic, payload, 'temperature')
             elif msg.topic == command_instance.topic_feature_current:
@@ -390,7 +406,7 @@ class Command(BaseCommand):
             extended_count = await sync_to_async(MalfunctionLog.objects.filter(
                 description__icontains='fährt aus', message_type='INFO'
             ).count)()
-            
+
             # Determine motor state
             latest_motor_state_log = await sync_to_async(MalfunctionLog.objects.filter(
                 Q(description__icontains='Motorzustand:')
@@ -409,12 +425,16 @@ class Command(BaseCommand):
             'temperature': await sync_to_async(RawData.objects.filter(metric_type='temperature').order_by('-timestamp').first)(),
             'current': await sync_to_async(RawData.objects.filter(metric_type='current').order_by('-timestamp').first)(),
             'torque': await sync_to_async(RawData.objects.filter(metric_type='torque').order_by('-timestamp').first)(),
+            'vibration_vin': await sync_to_async(RawData.objects.filter(metric_type='vibration_vin').order_by('-timestamp').first)(),
+            'gpio_rpm': await sync_to_async(RawData.objects.filter(metric_type='gpio_rpm').order_by('-timestamp').first)(),
         }
         latest_feature_data = {
             'temperature': await sync_to_async(FeatureData.objects.filter(metric_type='temperature').order_by('-timestamp').first)(),
             'current': await sync_to_async(FeatureData.objects.filter(metric_type='current').order_by('-timestamp').first)(),
             'torque': await sync_to_async(FeatureData.objects.filter(metric_type='torque').order_by('-timestamp').first)(),
         }
+        # Hier ist die Korrektur: latest_prediction_data sollte ein Dictionary sein, das die PredictionData-Objekte enthält.
+        # Es ist bereits korrekt, wie es ist. Der Fehler liegt im Zugriff darauf.
         latest_prediction_data = {
             'temperature': await sync_to_async(PredictionData.objects.filter(metric_type='temperature').order_by('-timestamp').first)(),
             'current': await sync_to_async(PredictionData.objects.filter(metric_type='current').order_by('-timestamp').first)(),
@@ -440,19 +460,29 @@ class Command(BaseCommand):
             "Strom": {
                 "value": latest_raw_data['current'].value if is_data_fresh(latest_raw_data['current'], self.data_freshness_threshold) else '-',
                 "unit": "A",
+                # Korrektur hier: Zugriff auf .status_value, nicht .get('status_value')
                 "prediction": latest_prediction_data['current'].status_value if latest_prediction_data['current'] and is_data_fresh(latest_prediction_data['current'], self.data_freshness_threshold) else None
             },
             "Spannung": {"value": latest_live_data.voltage if is_data_fresh(latest_live_data, self.data_freshness_threshold) else '-', "unit": "V"},
-            "Drehzahl": {"value": latest_live_data.rpm if is_data_fresh(latest_live_data, self.data_freshness_threshold) else '-', "unit": "U/min"},
-            "Vibration": {"value": latest_live_data.vibration if is_data_fresh(latest_live_data, self.data_freshness_threshold) else '-', "unit": "mm/s"},
+            # Priorisiere RawData für Drehzahl und Vibration
+            "Drehzahl": {
+                "value": latest_raw_data['gpio_rpm'].value if is_data_fresh(latest_raw_data['gpio_rpm'], self.data_freshness_threshold) else '-',
+                "unit": "U/min"
+            },
+            "Vibration": {
+                "value": latest_raw_data['vibration_vin'].value if is_data_fresh(latest_raw_data['vibration_vin'], self.data_freshness_threshold) else '-',
+                "unit": "mm/s"
+            },
             "Temperatur": {
                 "value": latest_raw_data['temperature'].value if is_data_fresh(latest_raw_data['temperature'], self.data_freshness_threshold) else '-',
                 "unit": "°C",
+                # Korrektur hier: Zugriff auf .status_value, nicht .get('status_value')
                 "prediction": latest_prediction_data['temperature'].status_value if latest_prediction_data['temperature'] and is_data_fresh(latest_prediction_data['temperature'], self.data_freshness_threshold) else None
             },
             "Drehmoment": {
                 "value": latest_raw_data['torque'].value if is_data_fresh(latest_raw_data['torque'], self.data_freshness_threshold) else '-',
                 "unit": "Nm",
+                # Korrektur hier: Zugriff auf .status_value, nicht .get('status_value')
                 "prediction": latest_prediction_data['torque'].status_value if latest_prediction_data['torque'] and is_data_fresh(latest_prediction_data['torque'], self.data_freshness_threshold) else None
             },
             "Laufzeit": {"value": latest_live_data.run_time if is_data_fresh(latest_live_data, self.data_freshness_threshold) else '-', "unit": "h"},
@@ -478,7 +508,8 @@ class Command(BaseCommand):
             metric: {
                 'value': getattr(data, 'value', None) if is_data_fresh(data, self.data_freshness_threshold) else None,
                 'timestamp': getattr(data, 'timestamp', None),
-                'prediction': latest_prediction_data[metric].status_value if latest_prediction_data.get(metric) and is_data_fresh(latest_prediction_data[metric], self.data_freshness_threshold) else None
+                # Korrektur hier: Zugriff auf .status_value, nicht .get('status_value')
+                'prediction': latest_prediction_data[metric].status_value if metric in latest_prediction_data and latest_prediction_data[metric] and is_data_fresh(latest_prediction_data[metric], self.data_freshness_threshold) else None
             }
             for metric, data in latest_raw_data.items()
         }
@@ -503,7 +534,7 @@ class Command(BaseCommand):
         # Initialisiere den Anomalie-Status und die Nachricht
         current_anomaly_detected = False
         current_anomaly_message = "Motor läuft normal."
-        
+
         # Flags, um festzuhalten, ob eine Anomalie eines bestimmten Typs aktiv ist
         deviation_anomaly_active = False
         prediction_anomaly_active = False
@@ -536,7 +567,7 @@ class Command(BaseCommand):
                             is_currently_deviating = True
                     elif raw_value != 0 and twin_value == 0: # Sonderfall: Twin ist 0, Raw ist nicht
                         is_currently_deviating = True
-                
+
                 if is_currently_deviating:
                     deviation_anomaly_active = True
                     if not last_anomaly_state.get(metric_name, False):
@@ -568,7 +599,7 @@ class Command(BaseCommand):
             # --- 4. Überprüfen auf unbestätigte Fehler- oder Warnmeldungen aus MalfunctionLog ---
             # Wir suchen nach den neuesten, unbestätigten ERROR- oder WARNING-Logs,
             # die NICHT von der Vorhersage stammen oder deren Ursache noch aktiv ist.
-            
+
             # Zuerst alle unquittierten ERRORs und WARNINGs holen
             unacknowledged_errors_warnings = await sync_to_async(list)(
                 MalfunctionLog.objects.filter(
@@ -590,7 +621,7 @@ class Command(BaseCommand):
                     # dann ignorieren wir diese spezifische MalfunctionLog-Meldung für das Haupt-Anomalie-Feld.
                     if not prediction_anomaly_active:
                         continue # Diese Meldung blockiert den "Motor läuft normal"-Status nicht
-                
+
                 # Wenn es keine Vorhersage-Anomalie ist ODER die Vorhersage-Anomalie noch aktiv ist,
                 # dann ist dies eine relevante Meldung.
                 active_malfunction_log_message = log_entry
