@@ -409,12 +409,12 @@
                     </div>
                      <!-- Grid displaying real-time sensor values -->
                     <div class="data-grid" id="real-motor-data-grid">
-                        <div class="data-item"><strong>Strom:</strong> <span id="real-strom">{{ real_motor_data.Strom.value|default:'N/A' }} {{ real_motor_data.Strom.unit }}</span></div>
-                        <div class="data-item"><strong>Spannung:</strong> <span id="real-spannung">{{ real_motor_data.Spannung.value|default:'N/A' }} {{ real_motor_data.Spannung.unit }}</span></div>
-                        <div class="data-item"><strong>Drehzahl:</strong> <span id="real-drehzahl">{{ real_motor_data.Drehzahl.value|default:'N/A' }} {{ real_motor_data.Drehzahl.unit }}</span></div>
+                        <div class="data-item"><strong>Strom:</strong> <span id="real-strom">{{ real_motor_data.Current.value|default:'N/A' }} {{ real_motor_data.Current.unit }}</span></div>
+                        <div class="data-item"><strong>Spannung:</strong> <span id="real-spannung">{{ real_motor_data.Voltage.value|default:'N/A' }} {{ real_motor_data.Voltage.unit }}</span></div>
+                        <div class="data-item"><strong>Drehzahl:</strong> <span id="real-drehzahl">{{ real_motor_data.RPM.value|default:'N/A' }} {{ real_motor_data.RPM.unit }}</span></div>
                         <div class="data-item"><strong>Vibration:</strong> <span id="real-vibration">{{ real_motor_data.Vibration.value|default:'N/A' }} {{ real_motor_data.Vibration.unit }}</span></div>
-                        <div class="data-item"><strong>Temperatur:</strong> <span id="real-temperatur">{{ real_motor_data.Temperatur.value|default:'N/A' }} {{ real_motor_data.Temperatur.unit }}</span></div>
-                        <div class="data-item"><strong>Drehmoment:</strong> <span id="real-drehmoment">{{ real_motor_data.Drehmoment.value|default:'N/A' }} {{ real_motor_data.Drehmoment.unit }}</span></div>
+                        <div class="data-item"><strong>Temperatur:</strong> <span id="real-temperatur">{{ real_motor_data.Temperature.value|default:'N/A' }} {{ real_motor_data.Temperature.unit }}</span></div>
+                        <div class="data-item"><strong>Drehmoment:</strong> <span id="real-drehmoment">{{ real_motor_data.Torque.value|default:'N/A' }} {{ real_motor_data.Torque.unit }}</span></div>
                         <div class="data-item"><strong>Anzahl eingefahren:</strong> <span id="real-anzahl-eingefahren">{{ real_motor_data.Anzahl_eingefahren.value|default:'N/A' }}</span></div>
                         <div class="data-item"><strong>Anzahl ausgefahren:</strong> <span id="real-anzahl-ausgefahren">{{ real_motor_data.Anzahl_ausgefahren.value|default:'N/A' }}</span></div>
                         <div class="data-item"><strong>Motorzustand:</strong> <span id="real-motorzustand">{{ real_motor_data.Motorzustand.value|default:'N/A' }}</span></div>        
@@ -473,12 +473,12 @@
                     </div>
                      <!-- Grid displaying expected sensor values from the digital twin -->
                     <div class="data-grid" id="digital-twin-data-grid">
-                        <div class="data-item"><strong>Strom:</strong> <span id="expected-strom">{{ digital_twin_data.Strom.value|default:'N/A' }} {{ digital_twin_data.Strom.unit }}</span></div>
-                        <div class="data-item"><strong>Spannung:</strong> <span id="expected-spannung">{{ digital_twin_data.Spannung.value|default:'N/A' }} {{ digital_twin_data.Spannung.unit }}</span></div>
-                        <div class="data-item"><strong>Drehzahl:</strong> <span id="expected-drehzahl">{{ digital_twin_data.Drehzahl.value|default:'N/A' }} {{ digital_twin_data.Drehzahl.unit }}</span></div>
+                        <div class="data-item"><strong>Strom:</strong> <span id="expected-strom">{{ digital_twin_data.Current.value|default:'N/A' }} {{ digital_twin_data.Current.unit }}</span></div>
+                        <div class="data-item"><strong>Spannung:</strong> <span id="expected-spannung">{{ digital_twin_data.Voltage.value|default:'N/A' }} {{ digital_twin_data.Voltage.unit }}</span></div>
+                        <div class="data-item"><strong>Drehzahl:</strong> <span id="expected-drehzahl">{{ digital_twin_data.RPM.value|default:'N/A' }} {{ digital_twin_data.RPM.unit }}</span></div>
                         <div class="data-item"><strong>Vibration:</strong> <span id="expected-vibration">{{ digital_twin_data.Vibration.value|default:'N/A' }} {{ digital_twin_data.Vibration.unit }}</span></div>
-                        <div class="data-item"><strong>Temperatur:</strong> <span id="expected-temperatur">{{ digital_twin_data.Temperatur.value|default:'N/A' }} {{ digital_twin_data.Temperatur.unit }}</span></div>
-                        <div class="data-item"><strong>Drehmoment:</strong> <span id="expected-drehmoment">{{ digital_twin_data.Drehmoment.value|default:'N/A' }} {{ digital_twin_data.Drehmoment.unit }}</span></div>
+                        <div class="data-item"><strong>Temperatur:</strong> <span id="expected-temperatur">{{ digital_twin_data.Temperature.value|default:'N/A' }} {{ digital_twin_data.Temperature.unit }}</span></div>
+                        <div class="data-item"><strong>Drehmoment:</strong> <span id="expected-drehmoment">{{ digital_twin_data.Torque.value|default:'N/A' }} {{ digital_twin_data.Torque.unit }}</span></div>
                         <div class="data-item"><strong>Anzahl eingefahren:</strong> <span id="expected-anzahl-eingefahren">{{ digital_twin_data.Anzahl_eingefahren.value|default:'N/A' }}</span></div>
                         <div class="data-item"><strong>Anzahl ausgefahren:</strong> <span id="expected-anzahl-ausgefahren">{{ digital_twin_data.Anzahl_ausgefahren.value|default:'N/A' }}</span></div>
                         <div class="data-item"><strong>Motorzustand:</strong> <span id="expected-motorzustand">{{ digital_twin_data.Motorzustand.value|default:'N/A' }}</span></div>
@@ -605,8 +605,8 @@
                 ],
                 yAxisID: 'y'
             },
-            'voltage': {
-                realChartId: 'real-voltage-chart', realDatasets: [{ datasetIndex: 0 }], // Live Voltage
+            'voltage': { // NEU: realDatasets auf Raw Voltage angepasst
+                realChartId: 'real-voltage-chart', realDatasets: [{ datasetIndex: 0 }], // Raw Voltage
                 twinChartId: 'dt-voltage-chart', twinDatasets: [{ datasetIndex: 0 }], // Twin Voltage
                 yAxisID: 'y'
             },
@@ -652,13 +652,13 @@
                 ],
                 yAxisID: 'y'
             },
-            'rpm': {
-                realChartId: 'real-rpm-chart', realDatasets: [{ datasetIndex: 0 }], // Live RPM
+            'rpm': { // NEU: realDatasets auf Raw RPM angepasst
+                realChartId: 'real-rpm-chart', realDatasets: [{ datasetIndex: 0 }], // Raw RPM
                 twinChartId: 'dt-rpm-chart', twinDatasets: [{ datasetIndex: 0 }], // Twin RPM
                 yAxisID: 'y'
             },
-            'vibration': {
-                realChartId: 'real-vibration-chart', realDatasets: [{ datasetIndex: 0 }], // Live Vibration
+            'vibration': { // NEU: realDatasets auf Raw Vibration angepasst
+                realChartId: 'real-vibration-chart', realDatasets: [{ datasetIndex: 0 }], // Raw Vibration
                 twinChartId: 'dt-vibration-chart', twinDatasets: [{ datasetIndex: 0 }], // Twin Vibration
                 yAxisID: 'y'
             }
@@ -922,10 +922,13 @@
             };
 
             // Populate real motor charts with historical data
-            // Prioritize raw data for current, temperature, torque
+            // Prioritize raw data for current, voltage, temperature, torque, rpm, vibration
             if (plotData.raw) {
                 if (plotData.raw.current) {
                     charts['real-current-chart'].data.datasets[0].data = processRawDataForChart(plotData.raw.current);
+                }
+                if (plotData.raw.voltage) { // NEU: Raw Voltage
+                    charts['real-voltage-chart'].data.datasets[0].data = processRawDataForChart(plotData.raw.voltage);
                 }
                 if (plotData.raw.temperature) {
                     charts['real-temp-chart'].data.datasets[0].data = processRawDataForChart(plotData.raw.temperature);
@@ -933,17 +936,26 @@
                 if (plotData.raw.torque) {
                     charts['real-torque-chart'].data.datasets[0].data = processRawDataForChart(plotData.raw.torque);
                 }
+                if (plotData.raw.gpio_rpm) { // Raw RPM
+                    charts['real-rpm-chart'].data.datasets[0].data = processRawDataForChart(plotData.raw.gpio_rpm);
+                }
+                if (plotData.raw.vibration_vin) { // Raw Vibration
+                    charts['real-vibration-chart'].data.datasets[0].data = processRawDataForChart(plotData.raw.vibration_vin);
+                }
             }
-            // Use live data for voltage, rpm, vibration, and as fallback for current/temp/torque if raw is missing
+            // Use live data as fallback for metrics if raw is missing
             if (plotData.live) {
-                if (plotData.live.voltage) charts['real-voltage-chart'].data.datasets[0].data = plotData.live.voltage.map(p => ({x: new Date(p.x), y: p.y}));
-                if (plotData.live.rpm) charts['real-rpm-chart'].data.datasets[0].data = plotData.live.rpm.map(p => ({x: new Date(p.x), y: p.y}));
-                if (plotData.live.vibration) charts['real-vibration-chart'].data.datasets[0].data = plotData.live.vibration.map(p => ({x: new Date(p.x), y: p.y}));
-
-                // Fallback for current, temp, torque if raw data was not available or empty
-                // Note: Fallback live data points will have default blue circle style as they don't have prediction
                 if ((!plotData.raw || !plotData.raw.current || plotData.raw.current.length === 0) && plotData.live.current) {
                     charts['real-current-chart'].data.datasets[0].data = plotData.live.current.map(p => ({x: new Date(p.x), y: p.y}));
+                }
+                if ((!plotData.raw || !plotData.raw.voltage || plotData.raw.voltage.length === 0) && plotData.live.voltage) { // NEU: Fallback for Voltage
+                    charts['real-voltage-chart'].data.datasets[0].data = plotData.live.voltage.map(p => ({x: new Date(p.x), y: p.y}));
+                }
+                if ((!plotData.raw || !plotData.raw.gpio_rpm || plotData.raw.gpio_rpm.length === 0) && plotData.live.rpm) {
+                    charts['real-rpm-chart'].data.datasets[0].data = plotData.live.rpm.map(p => ({x: new Date(p.x), y: p.y}));
+                }
+                if ((!plotData.raw || !plotData.raw.vibration_vin || plotData.raw.vibration_vin.length === 0) && plotData.live.vibration) {
+                    charts['real-vibration-chart'].data.datasets[0].data = plotData.live.vibration.map(p => ({x: new Date(p.x), y: p.y}));
                 }
                 if ((!plotData.raw || !plotData.raw.temperature || plotData.raw.temperature.length === 0) && plotData.live.temp) {
                     charts['real-temp-chart'].data.datasets[0].data = plotData.live.temp.map(p => ({x: new Date(p.x), y: p.y}));
@@ -1085,14 +1097,14 @@
                     median: { dataKey: 'feature', metric: 'current_median', datasetIndex: 4 },
                     std: { dataKey: 'feature', metric: 'current_std', datasetIndex: 5 },
                 },
-                'real-voltage-chart': {
-                    live: { dataKey: 'live', metric: 'voltage', datasetIndex: 0 },
+                'real-voltage-chart': { // NEU
+                    raw: { dataKey: 'raw', metric: 'voltage', datasetIndex: 0 },
                 },
                 'real-rpm-chart': {
-                    live: { dataKey: 'live', metric: 'rpm', datasetIndex: 0 },
+                    raw: { dataKey: 'raw', metric: 'gpio_rpm', datasetIndex: 0 },
                 },
                 'real-vibration-chart': {
-                    live: { dataKey: 'live', metric: 'vibration', datasetIndex: 0 },
+                    raw: { dataKey: 'raw', metric: 'vibration_vin', datasetIndex: 0 },
                 },
                 'real-temp-chart': {
                     raw: { dataKey: 'raw', metric: 'temperature', datasetIndex: 0 },
@@ -1118,7 +1130,7 @@
                     median: { dataKey: 'feature', metric: 'current_median', datasetIndex: 4 },
                     std: { dataKey: 'feature', metric: 'current_std', datasetIndex: 5 },
                 },
-                'dt-voltage-chart': {
+                'dt-voltage-chart': { // NEU
                     twin: { dataKey: 'twin', metric: 'voltage', datasetIndex: 0 },
                 },
                 'dt-rpm-chart': {
@@ -1128,7 +1140,7 @@
                     twin: { dataKey: 'twin', metric: 'vibration', datasetIndex: 0 },
                 },
                 'dt-temp-chart': {
-                    twin: { dataKey: 'twin', metric: 'temperature', datasetIndex: 0 },
+                    twin: { dataKey: 'twin', metric: 'temp', datasetIndex: 0 }, // Twin uses 'temp' for temperature
                     mean: { dataKey: 'feature', metric: 'temperature_mean', datasetIndex: 1 },
                     min: { dataKey: 'feature', metric: 'temperature_min', datasetIndex: 2 },
                     max: { dataKey: 'feature', metric: 'temperature_max', datasetIndex: 3 },
@@ -1175,6 +1187,10 @@
                     }
                     // Handle live data for voltage, rpm, vibration, and as fallback
                     else if (mapping.dataKey === 'live' && sourceData && sourceData[mapping.metric]) {
+                        // This case is for live data that is NOT raw data, e.g., run_time, or if raw data is missing
+                        // In the current setup, voltage, rpm, vibration are now primarily raw, but live data might still exist as fallback.
+                        // However, for plot_data_point, we expect raw data if it's available.
+                        // If raw data is not available, and live data comes, it will be added here.
                         value = sourceData[mapping.metric].y;
                         timestamp = new Date(sourceData[mapping.metric].x);
                     }
@@ -1195,8 +1211,9 @@
 
                     if (value !== null && timestamp) {
                         const newPoint = { x: timestamp, y: value };
+                        // Attach prediction for raw data points if available
                         if (mapping.dataKey === 'raw') {
-                            newPoint.prediction = predictionStatus; // Attach prediction for raw data points
+                            newPoint.prediction = predictionStatus;
                         }
                         
                         dataset.data.push(newPoint);
@@ -1222,17 +1239,17 @@
         document.addEventListener('DOMContentLoaded', () => {
             // Define a consistent color palette for each metric type and its features
             const colors = {
-                raw: 'rgb(0, 150, 136)',        // Teal for raw current
-                mean: 'rgb(255, 159, 64)',      // Orange for mean
-                min: 'rgb(75, 192, 192)',       // Light Teal for min
-                max: 'rgb(255, 99, 132)',       // Red for max
-                median: 'rgb(54, 162, 235)',    // Blue for median
-                std: 'rgb(153, 102, 255)',      // Purple for std
-                voltage: 'rgb(255, 99, 132)',   // Red for voltage
-                rpm: 'rgb(54, 162, 235)',       // Blue for RPM
-                vibration: 'rgb(255, 205, 86)', // Yellow for vibration
-                temperature: 'rgb(153, 102, 255)', // Purple for raw temperature
-                torque: 'rgb(255, 159, 64)'     // Orange for raw torque
+                raw: 'rgb(0, 150, 136)',            // Teal for raw current
+                mean: 'rgb(255, 159, 64)',          // Orange for mean
+                min: 'rgb(75, 192, 192)',           // Light Teal for min
+                max: 'rgb(255, 99, 132)',           // Red for max
+                median: 'rgb(54, 162, 235)',        // Blue for median
+                std: 'rgb(153, 102, 255)',          // Purple for std
+                voltage: 'rgb(255, 99, 132)',       // Yellow for voltage 
+                rpm: 'rgb(54, 162, 235)',           // Blue for RPM
+                vibration: 'rgb(255, 205, 86)',     // Red for vibration
+                temperature: 'rgb(153, 102, 255)',  // Purple for raw temperature
+                torque: 'rgb(255, 159, 64)'         // Orange for raw torque
             };
 
             // Initialize real motor current chart
@@ -1252,9 +1269,9 @@
                 }
             });
 
-            // Initialize real motor voltage chart
+            // Initialize real motor voltage chart (now uses Raw Voltage)
             initializeChart('real-voltage-chart', 'Spannungsverlauf über die Zeit', [
-                { label: 'Spannung (V)', borderColor: colors.voltage, pointRadius: 0 }
+                { label: 'Spannung (Raw)', borderColor: colors.voltage, pointRadius: 0 } // NEU: Label angepasst
             ], {
                 scales: {
                     y: {
@@ -1264,9 +1281,9 @@
                 }
             });
 
-            // Initialize real motor RPM chart
+            // Initialize real motor RPM chart (now uses Raw RPM)
             initializeChart('real-rpm-chart', 'Drehzahlverlauf über die Zeit', [
-                { label: 'Drehzahl (U/min)', borderColor: colors.rpm, pointRadius: 0 }
+                { label: 'Drehzahl (Raw)', borderColor: colors.rpm, pointRadius: 0 } // NEU: Label angepasst
             ], {
                 scales: {
                     y: {
@@ -1275,9 +1292,9 @@
                     }
                 }
             });
-            // Initialize real motor vibration chart
+            // Initialize real motor vibration chart (now uses Raw Vibration)
             initializeChart('real-vibration-chart', 'Vibrationsverlauf über die Zeit', [
-                { label: 'Vibration (mm/s)', borderColor: colors.vibration, pointRadius: 0 }
+                { label: 'Vibration (Raw)', borderColor: colors.vibration, pointRadius: 0 } // NEU: Label angepasst
             ], {
                 scales: {
                     y: {
@@ -1338,7 +1355,7 @@
 
             // Initialize digital twin voltage chart with dashed lines
             initializeChart('dt-voltage-chart', 'Spannungsverlauf über die Zeit (Modell)', [
-                { label: 'Spannung (V) ', borderColor: colors.voltage, pointRadius: 0 }
+                { label: 'Spannung (V) ', borderColor: colors.voltage, pointRadius: 0 } // NEU: Label angepasst
             ], {
                 scales: {
                     y: {
@@ -1350,7 +1367,7 @@
 
             // Initialize digital twin RPM chart with dashed lines
             initializeChart('dt-rpm-chart', 'Drehzahlverlauf über die Zeit (Modell)', [
-                { label: 'Drehzahl (U/min) ', borderColor: colors.rpm, pointRadius: 0 }
+                { label: 'Drehzahl (U/min) ', borderColor: colors.rpm, pointRadius: 0 } // NEU: Label angepasst
             ], {
                 scales: {
                     y: {
@@ -1361,7 +1378,7 @@
             });
             // Initialize digital twin vibration chart with dashed lines
             initializeChart('dt-vibration-chart', 'Vibrationsverlauf über die Zeit (Modell)', [
-                { label: 'Vibration (mm/s) ', borderColor: colors.vibration, pointRadius: 0 }
+                { label: 'Vibration (mm/s) ', borderColor: colors.vibration, pointRadius: 0 } // NEU: Label angepasst
             ], {
                 scales: {
                     y: {

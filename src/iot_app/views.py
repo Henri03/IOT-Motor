@@ -1,4 +1,7 @@
 # path: src/iot_app/views.py
+
+# Die views.py ist für die initiale Dashboard-Ansicht zuständig, bevor WebSocket-Updates greifen.
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone
 from django.http import JsonResponse

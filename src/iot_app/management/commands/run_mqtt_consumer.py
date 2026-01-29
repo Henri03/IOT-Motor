@@ -58,6 +58,7 @@ class Command(BaseCommand):
         # Neue Topics für Rohdaten
         parser.add_argument('--topic_raw_vibration_vin', type=str, default=getattr(settings, 'TOPIC_RAW_VIBRATION_VIN', "Sensor/vin/vibration_raw"), help='MQTT Topic für Rohdaten Vibration VIN')
         parser.add_argument('--topic_raw_gpio_rpm', type=str, default=getattr(settings, 'TOPIC_RAW_GPIO_RPM', "Sensor/gpio/rpm"), help='MQTT Topic für Rohdaten GPIO RPM')
+        parser.add_argument('--topic_raw_voltage', type=str, default=getattr(settings, 'TOPIC_RAW_VOLTAGE', "raw/voltage"), help='MQTT Topic für Rohdaten Spannung') # NEU
 
         parser.add_argument('--topic_feature_temperature', type=str, default=getattr(settings, 'MQTT_TOPIC_FEATURE_TEMPERATURE', "feature/temperature"), help='MQTT Topic für Feature-Daten Temperatur')
         parser.add_argument('--topic_feature_current', type=str, default=getattr(settings, 'MQTT_TOPIC_FEATURE_CURRENT', "feature/current"), help='MQTT Topic für Feature-Daten Strom')
@@ -88,6 +89,7 @@ class Command(BaseCommand):
         # Neue Topics
         self.topic_raw_vibration_vin = options['topic_raw_vibration_vin']
         self.topic_raw_gpio_rpm = options['topic_raw_gpio_rpm']
+        self.topic_raw_voltage = options['topic_raw_voltage'] # NEU
 
         self.topic_feature_temperature = options['topic_feature_temperature']
         self.topic_feature_current = options['topic_feature_current']
@@ -112,7 +114,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Abonniere Störungswarnung-Topic: {self.topic_malfunction_warning}"))
         self.stdout.write(self.style.SUCCESS(f"Abonniere Störungsfehler-Topic: {self.topic_malfunction_error}"))
 
-        self.stdout.write(self.style.SUCCESS(f"Abonniere Rohdaten-Topics: {self.topic_raw_temperature}, {self.topic_raw_current}, {self.topic_raw_torque}, {self.topic_raw_vibration_vin}, {self.topic_raw_gpio_rpm}"))
+        self.stdout.write(self.style.SUCCESS(f"Abonniere Rohdaten-Topics: {self.topic_raw_temperature}, {self.topic_raw_current}, {self.topic_raw_torque}, {self.topic_raw_vibration_vin}, {self.topic_raw_gpio_rpm}, {self.topic_raw_voltage}")) # NEU: Voltage hinzugefügt
         self.stdout.write(self.style.SUCCESS(f"Abonniere Feature-Topics: {self.topic_feature_temperature}, {self.topic_feature_current}, {self.topic_feature_torque}"))
         self.stdout.write(self.style.SUCCESS(f"Abonniere Vorhersage-Topics: {self.topic_prediction_temperature}, {self.topic_prediction_current}, {self.topic_prediction_torque}"))
 
@@ -150,9 +152,9 @@ class Command(BaseCommand):
             client.subscribe(command_instance.topic_raw_temperature)
             client.subscribe(command_instance.topic_raw_current)
             client.subscribe(command_instance.topic_raw_torque)
-            # Neue Topics abonnieren
             client.subscribe(command_instance.topic_raw_vibration_vin)
             client.subscribe(command_instance.topic_raw_gpio_rpm)
+            client.subscribe(command_instance.topic_raw_voltage) # NEU
 
             client.subscribe(command_instance.topic_feature_temperature)
             client.subscribe(command_instance.topic_feature_current)
@@ -199,11 +201,12 @@ class Command(BaseCommand):
                 await command_instance._handle_raw_data(msg.topic, payload, 'current')
             elif msg.topic == command_instance.topic_raw_torque:
                 await command_instance._handle_raw_data(msg.topic, payload, 'torque')
-            # Neue Rohdaten-Topics
             elif msg.topic == command_instance.topic_raw_vibration_vin:
                 await command_instance._handle_raw_data(msg.topic, payload, 'vibration_vin')
             elif msg.topic == command_instance.topic_raw_gpio_rpm:
                 await command_instance._handle_raw_data(msg.topic, payload, 'gpio_rpm')
+            elif msg.topic == command_instance.topic_raw_voltage: # NEU
+                await command_instance._handle_raw_data(msg.topic, payload, 'voltage') # NEU
 
             elif msg.topic == command_instance.topic_feature_temperature:
                 await command_instance._handle_feature_data(msg.topic, payload, 'temperature')
@@ -427,6 +430,7 @@ class Command(BaseCommand):
             'torque': await sync_to_async(RawData.objects.filter(metric_type='torque').order_by('-timestamp').first)(),
             'vibration_vin': await sync_to_async(RawData.objects.filter(metric_type='vibration_vin').order_by('-timestamp').first)(),
             'gpio_rpm': await sync_to_async(RawData.objects.filter(metric_type='gpio_rpm').order_by('-timestamp').first)(),
+            'voltage': await sync_to_async(RawData.objects.filter(metric_type='voltage').order_by('-timestamp').first)(), # NEU
         }
         latest_feature_data = {
             'temperature': await sync_to_async(FeatureData.objects.filter(metric_type='temperature').order_by('-timestamp').first)(),
@@ -463,7 +467,11 @@ class Command(BaseCommand):
                 # Korrektur hier: Zugriff auf .status_value, nicht .get('status_value')
                 "prediction": latest_prediction_data['current'].status_value if latest_prediction_data['current'] and is_data_fresh(latest_prediction_data['current'], self.data_freshness_threshold) else None
             },
-            "Spannung": {"value": latest_live_data.voltage if is_data_fresh(latest_live_data, self.data_freshness_threshold) else '-', "unit": "V"},
+            "Spannung": { # NEU: Spannung priorisiert RawData
+                "value": latest_raw_data['voltage'].value if is_data_fresh(latest_raw_data['voltage'], self.data_freshness_threshold) else '-',
+                "unit": "V",
+                "prediction": None # Keine Vorhersage für Spannung bisher
+            },
             # Priorisiere RawData für Drehzahl und Vibration
             "Drehzahl": {
                 "value": latest_raw_data['gpio_rpm'].value if is_data_fresh(latest_raw_data['gpio_rpm'], self.data_freshness_threshold) else '-',
@@ -501,7 +509,7 @@ class Command(BaseCommand):
             "Drehmoment": {"value": latest_twin_data.torque if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "Nm"},
             "Laufzeit": {"value": latest_twin_data.run_time if is_data_fresh(latest_twin_data, self.data_freshness_threshold) else None, "unit": "h"},
             "Anzahl eingefahren": {"value": retracted_count, "unit": ""},
-            "Anzahl ausgefahren": {"value": extended_count, "unit": ""},
+            "Anzahl ausgefahren": {"value": "N/A", "unit": ""},
         }
 
         dashboard_raw_data = {
@@ -539,14 +547,15 @@ class Command(BaseCommand):
         deviation_anomaly_active = False
         prediction_anomaly_active = False
 
-        metrics_to_compare = ['current', 'temperature', 'torque'] # 'temp' in TwinData, 'temperature' in RawData/PredictionData
+        metrics_to_compare = ['current', 'temperature', 'torque', 'voltage'] # NEU: Voltage hinzugefügt
         logs_to_create = []
 
         # --- 1. Überprüfen auf unzureichende oder veraltete Daten (höchste Priorität, da keine Erkennung möglich) ---
-        if not latest_raw_data['current'] or not latest_raw_data['temperature'] or not latest_raw_data['torque'] or not latest_twin_data or \
+        if not latest_raw_data['current'] or not latest_raw_data['temperature'] or not latest_raw_data['torque'] or not latest_raw_data['voltage'] or not latest_twin_data or \
             not is_data_fresh(latest_raw_data['current'], self.data_freshness_threshold) or \
             not is_data_fresh(latest_raw_data['temperature'], self.data_freshness_threshold) or \
             not is_data_fresh(latest_raw_data['torque'], self.data_freshness_threshold) or \
+            not is_data_fresh(latest_raw_data['voltage'], self.data_freshness_threshold) or \
             not is_data_fresh(latest_twin_data, self.data_freshness_threshold):
             current_anomaly_detected = True
             current_anomaly_message = "Unzureichende oder veraltete Daten für die Anomalieerkennung verfügbar."

@@ -107,8 +107,9 @@ class RawData(models.Model):
         ('temperature', 'Temperatur'),
         ('current', 'Strom'),
         ('torque', 'Drehmoment'),
-        ('vibration_vin', 'Vibration (VIN)'), # Neu hinzugefügt
-        ('gpio_rpm', 'Drehzahl (GPIO)'),     # Neu hinzugefügt
+        ('vibration_vin', 'Vibration (VIN)'), 
+        ('gpio_rpm', 'Drehzahl (GPIO)'),     
+        ('voltage', 'Spannung'), 
     ]
     timestamp = models.DateTimeField(default=timezone.now, verbose_name="Zeitstempel")
     metric_type = models.CharField(max_length=50, choices=METRIC_TYPE_CHOICES, verbose_name="Metrik-Typ")
@@ -121,7 +122,7 @@ class RawData(models.Model):
         verbose_name = "Rohdaten"
         verbose_name_plural = "Rohdaten"
         ordering = ['-timestamp']
-        # Optional: Index für schnelle Abfragen nach Metrik-Typ und Zeitstempel
+        # Index für schnelle Abfragen nach Metrik-Typ und Zeitstempel
         indexes = [
             models.Index(fields=['metric_type', 'timestamp']),
         ]
