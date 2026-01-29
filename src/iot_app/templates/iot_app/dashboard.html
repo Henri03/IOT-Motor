@@ -417,7 +417,7 @@
                         <div class="data-item"><strong>Drehmoment:</strong> <span id="real-drehmoment">{{ real_motor_data.Drehmoment.value|default:'N/A' }} {{ real_motor_data.Drehmoment.unit }}</span></div>
                         <div class="data-item"><strong>Anzahl eingefahren:</strong> <span id="real-anzahl-eingefahren">{{ real_motor_data.Anzahl_eingefahren.value|default:'N/A' }}</span></div>
                         <div class="data-item"><strong>Anzahl ausgefahren:</strong> <span id="real-anzahl-ausgefahren">{{ real_motor_data.Anzahl_ausgefahren.value|default:'N/A' }}</span></div>
-                        <div class="data-item"><strong>Motorzustand:</strong> <span id="real-motorzustand">{{ real_motor_data.Motorzustand.value|default:'N/A' }}</span></div>
+                        <div class="data-item"><strong>Motorzustand:</strong> <span id="real-motorzustand">{{ real_motor_data.Motorzustand.value|default:'N/A' }}</span></div>        
                     </div>
                 </div>
 
@@ -805,8 +805,8 @@
                     }
                     // Apply to twin chart
                     if (twinChart && twinChart.options.scales[group.yAxisID]) {
-                        twinChart.options.scales[group.yAxisID].min = undefined; // Twin charts should auto-scale based on their own data
-                        twinChart.options.scales[group.yAxisID].max = undefined; // Twin charts should auto-scale based on their own data
+                        twinChart.options.scales[group.yAxisID].min = minVal;
+                        twinChart.options.scales[group.yAxisID].max = maxVal;
                         twinChart.update('none');
                     }
                 } else {
@@ -913,109 +913,99 @@
             });
 
             // Helper to process raw data points with prediction status
-            const processDataForChart = (dataArray) => {
-                return dataArray.map(p => ({
+            const processRawDataForChart = (rawDataArray) => {
+                return rawDataArray.map(p => ({
                     x: new Date(p.x),
                     y: p.y,
-                    prediction: p.prediction // Pass prediction status if available
+                    prediction: p.prediction // Pass prediction status
                 }));
             };
 
             // Populate real motor charts with historical data
-            // Prioritize raw data for current, temperature, torque, vibration, rpm
+            // Prioritize raw data for current, temperature, torque
             if (plotData.raw) {
                 if (plotData.raw.current) {
-                    charts['real-current-chart'].data.datasets[0].data = processDataForChart(plotData.raw.current);
+                    charts['real-current-chart'].data.datasets[0].data = processRawDataForChart(plotData.raw.current);
                 }
                 if (plotData.raw.temperature) {
-                    charts['real-temp-chart'].data.datasets[0].data = processDataForChart(plotData.raw.temperature);
+                    charts['real-temp-chart'].data.datasets[0].data = processRawDataForChart(plotData.raw.temperature);
                 }
                 if (plotData.raw.torque) {
-                    charts['real-torque-chart'].data.datasets[0].data = processDataForChart(plotData.raw.torque);
-                }
-                if (plotData.raw.vibration_vin) {
-                    charts['real-vibration-chart'].data.datasets[0].data = processDataForChart(plotData.raw.vibration_vin);
-                }
-                if (plotData.raw.gpio_rpm) {
-                    charts['real-rpm-chart'].data.datasets[0].data = processDataForChart(plotData.raw.gpio_rpm);
+                    charts['real-torque-chart'].data.datasets[0].data = processRawDataForChart(plotData.raw.torque);
                 }
             }
-            // Use live data for voltage, and as fallback for current/temp/torque/vibration/rpm if raw is missing
+            // Use live data for voltage, rpm, vibration, and as fallback for current/temp/torque if raw is missing
             if (plotData.live) {
-                if (plotData.live.voltage) charts['real-voltage-chart'].data.datasets[0].data = processDataForChart(plotData.live.voltage);
+                if (plotData.live.voltage) charts['real-voltage-chart'].data.datasets[0].data = plotData.live.voltage.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.live.rpm) charts['real-rpm-chart'].data.datasets[0].data = plotData.live.rpm.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.live.vibration) charts['real-vibration-chart'].data.datasets[0].data = plotData.live.vibration.map(p => ({x: new Date(p.x), y: p.y}));
 
-                // Fallback for current, temp, torque, vibration, rpm if raw data was not available or empty
+                // Fallback for current, temp, torque if raw data was not available or empty
                 // Note: Fallback live data points will have default blue circle style as they don't have prediction
                 if ((!plotData.raw || !plotData.raw.current || plotData.raw.current.length === 0) && plotData.live.current) {
-                    charts['real-current-chart'].data.datasets[0].data = processDataForChart(plotData.live.current);
+                    charts['real-current-chart'].data.datasets[0].data = plotData.live.current.map(p => ({x: new Date(p.x), y: p.y}));
                 }
                 if ((!plotData.raw || !plotData.raw.temperature || plotData.raw.temperature.length === 0) && plotData.live.temp) {
-                    charts['real-temp-chart'].data.datasets[0].data = processDataForChart(plotData.live.temp);
+                    charts['real-temp-chart'].data.datasets[0].data = plotData.live.temp.map(p => ({x: new Date(p.x), y: p.y}));
                 }
                 if ((!plotData.raw || !plotData.raw.torque || plotData.raw.torque.length === 0) && plotData.live.torque) {
-                    charts['real-torque-chart'].data.datasets[0].data = processDataForChart(plotData.live.torque);
-                }
-                if ((!plotData.raw || !plotData.raw.vibration_vin || plotData.raw.vibration_vin.length === 0) && plotData.live.vibration) {
-                    charts['real-vibration-chart'].data.datasets[0].data = processDataForChart(plotData.live.vibration);
-                }
-                if ((!plotData.raw || !plotData.raw.gpio_rpm || plotData.raw.gpio_rpm.length === 0) && plotData.live.rpm) {
-                    charts['real-rpm-chart'].data.datasets[0].data = processDataForChart(plotData.live.rpm);
+                    charts['real-torque-chart'].data.datasets[0].data = plotData.live.torque.map(p => ({x: new Date(p.x), y: p.y}));
                 }
             }
 
             // Populate digital twin charts with historical data
             if (plotData.twin) {
-                if (plotData.twin.current) charts['dt-current-chart'].data.datasets[0].data = processDataForChart(plotData.twin.current);
-                if (plotData.twin.voltage) charts['dt-voltage-chart'].data.datasets[0].data = processDataForChart(plotData.twin.voltage);
-                if (plotData.twin.rpm) charts['dt-rpm-chart'].data.datasets[0].data = processDataForChart(plotData.twin.rpm);
-                if (plotData.twin.vibration) charts['dt-vibration-chart'].data.datasets[0].data = processDataForChart(plotData.twin.vibration);
-                if (plotData.twin.temp) charts['dt-temp-chart'].data.datasets[0].data = processDataForChart(plotData.twin.temp);
-                if (plotData.twin.torque) charts['dt-torque-chart'].data.datasets[0].data = processDataForChart(plotData.twin.torque);
+                if (plotData.twin.current) charts['dt-current-chart'].data.datasets[0].data = plotData.twin.current.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.twin.voltage) charts['dt-voltage-chart'].data.datasets[0].data = plotData.twin.voltage.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.twin.rpm) charts['dt-rpm-chart'].data.datasets[0].data = plotData.twin.rpm.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.twin.vibration) charts['dt-vibration-chart'].data.datasets[0].data = plotData.twin.vibration.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.twin.temp) charts['dt-temp-chart'].data.datasets[0].data = plotData.twin.temp.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.twin.torque) charts['dt-torque-chart'].data.datasets[0].data = plotData.twin.torque.map(p => ({x: new Date(p.x), y: p.y}));
             }
 
             // Populate feature data into the respective real data charts
             if (plotData.feature) {
                 // Temperature Features (Real)
-                if (plotData.feature.temperature_mean) charts['real-temp-chart'].data.datasets[1].data = processDataForChart(plotData.feature.temperature_mean);
-                if (plotData.feature.temperature_min) charts['real-temp-chart'].data.datasets[2].data = processDataForChart(plotData.feature.temperature_min);
-                if (plotData.feature.temperature_max) charts['real-temp-chart'].data.datasets[3].data = processDataForChart(plotData.feature.temperature_max);
-                if (plotData.feature.temperature_median) charts['real-temp-chart'].data.datasets[4].data = processDataForChart(plotData.feature.temperature_median);
-                if (plotData.feature.temperature_std) charts['real-temp-chart'].data.datasets[5].data = processDataForChart(plotData.feature.temperature_std);
+                if (plotData.feature.temperature_mean) charts['real-temp-chart'].data.datasets[1].data = plotData.feature.temperature_mean.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.temperature_min) charts['real-temp-chart'].data.datasets[2].data = plotData.feature.temperature_min.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.temperature_max) charts['real-temp-chart'].data.datasets[3].data = plotData.feature.temperature_max.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.temperature_median) charts['real-temp-chart'].data.datasets[4].data = plotData.feature.temperature_median.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.temperature_std) charts['real-temp-chart'].data.datasets[5].data = plotData.feature.temperature_std.map(p => ({x: new Date(p.x), y: p.y}));
 
                 // Current Features (Real)
-                if (plotData.feature.current_mean) charts['real-current-chart'].data.datasets[1].data = processDataForChart(plotData.feature.current_mean);
-                if (plotData.feature.current_min) charts['real-current-chart'].data.datasets[2].data = processDataForChart(plotData.feature.current_min);
-                if (plotData.feature.current_max) charts['real-current-chart'].data.datasets[3].data = processDataForChart(plotData.feature.current_max);
-                if (plotData.feature.current_median) charts['real-current-chart'].data.datasets[4].data = processDataForChart(plotData.feature.current_median);
-                if (plotData.feature.current_std) charts['real-current-chart'].data.datasets[5].data = processDataForChart(plotData.feature.current_std);
+                if (plotData.feature.current_mean) charts['real-current-chart'].data.datasets[1].data = plotData.feature.current_mean.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.current_min) charts['real-current-chart'].data.datasets[2].data = plotData.feature.current_min.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.current_max) charts['real-current-chart'].data.datasets[3].data = plotData.feature.current_max.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.current_median) charts['real-current-chart'].data.datasets[4].data = plotData.feature.current_median.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.current_std) charts['real-current-chart'].data.datasets[5].data = plotData.feature.current_std.map(p => ({x: new Date(p.x), y: p.y}));
 
                 // Torque Features (Real)
-                if (plotData.feature.torque_mean) charts['real-torque-chart'].data.datasets[1].data = processDataForChart(plotData.feature.torque_mean);
-                if (plotData.feature.torque_min) charts['real-torque-chart'].data.datasets[2].data = processDataForChart(plotData.feature.torque_min);
-                if (plotData.feature.torque_max) charts['real-torque-chart'].data.datasets[3].data = processDataForChart(plotData.feature.torque_max);
-                if (plotData.feature.torque_median) charts['real-torque-chart'].data.datasets[4].data = processDataForChart(plotData.feature.torque_median);
-                if (plotData.feature.torque_std) charts['real-torque-chart'].data.datasets[5].data = processDataForChart(plotData.feature.torque_std);
+                if (plotData.feature.torque_mean) charts['real-torque-chart'].data.datasets[1].data = plotData.feature.torque_mean.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.torque_min) charts['real-torque-chart'].data.datasets[2].data = plotData.feature.torque_min.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.torque_max) charts['real-torque-chart'].data.datasets[3].data = plotData.feature.torque_max.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.torque_median) charts['real-torque-chart'].data.datasets[4].data = plotData.feature.torque_median.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.torque_std) charts['real-torque-chart'].data.datasets[5].data = plotData.feature.torque_std.map(p => ({x: new Date(p.x), y: p.y}));
 
                 // Temperature Features (Twin)
-                if (plotData.feature.temperature_mean) charts['dt-temp-chart'].data.datasets[1].data = processDataForChart(plotData.feature.temperature_mean);
-                if (plotData.feature.temperature_min) charts['dt-temp-chart'].data.datasets[2].data = processDataForChart(plotData.feature.temperature_min);
-                if (plotData.feature.temperature_max) charts['dt-temp-chart'].data.datasets[3].data = processDataForChart(plotData.feature.temperature_max);
-                if (plotData.feature.temperature_median) charts['dt-temp-chart'].data.datasets[4].data = processDataForChart(plotData.feature.temperature_median);
-                if (plotData.feature.temperature_std) charts['dt-temp-chart'].data.datasets[5].data = processDataForChart(plotData.feature.temperature_std);
+                if (plotData.feature.temperature_mean) charts['dt-temp-chart'].data.datasets[1].data = plotData.feature.temperature_mean.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.temperature_min) charts['dt-temp-chart'].data.datasets[2].data = plotData.feature.temperature_min.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.temperature_max) charts['dt-temp-chart'].data.datasets[3].data = plotData.feature.temperature_max.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.temperature_median) charts['dt-temp-chart'].data.datasets[4].data = plotData.feature.temperature_median.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.temperature_std) charts['dt-temp-chart'].data.datasets[5].data = plotData.feature.temperature_std.map(p => ({x: new Date(p.x), y: p.y}));
 
                 // Current Features (Twin)
-                if (plotData.feature.current_mean) charts['dt-current-chart'].data.datasets[1].data = processDataForChart(plotData.feature.current_mean);
-                if (plotData.feature.current_min) charts['dt-current-chart'].data.datasets[2].data = processDataForChart(plotData.feature.current_min);
-                if (plotData.feature.current_max) charts['dt-current-chart'].data.datasets[3].data = processDataForChart(plotData.feature.current_max);
-                if (plotData.feature.current_median) charts['dt-current-chart'].data.datasets[4].data = processDataForChart(plotData.feature.current_median);
-                if (plotData.feature.current_std) charts['dt-current-chart'].data.datasets[5].data = processDataForChart(plotData.feature.current_std);
+                if (plotData.feature.current_mean) charts['dt-current-chart'].data.datasets[1].data = plotData.feature.current_mean.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.current_min) charts['dt-current-chart'].data.datasets[2].data = plotData.feature.current_min.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.current_max) charts['dt-current-chart'].data.datasets[3].data = plotData.feature.current_max.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.current_median) charts['dt-current-chart'].data.datasets[4].data = plotData.feature.current_median.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.current_std) charts['dt-current-chart'].data.datasets[5].data = plotData.feature.current_std.map(p => ({x: new Date(p.x), y: p.y}));
 
                 // Torque Features (Twin)
-                if (plotData.feature.torque_mean) charts['dt-torque-chart'].data.datasets[1].data = processDataForChart(plotData.feature.torque_mean);
-                if (plotData.feature.torque_min) charts['dt-torque-chart'].data.datasets[2].data = processDataForChart(plotData.feature.torque_min);
-                if (plotData.feature.torque_max) charts['dt-torque-chart'].data.datasets[3].data = processDataForChart(plotData.feature.torque_max);
-                if (plotData.feature.torque_median) charts['dt-torque-chart'].data.datasets[4].data = processDataForChart(plotData.feature.torque_median);
-                if (plotData.feature.torque_std) charts['dt-torque-chart'].data.datasets[5].data = processDataForChart(plotData.feature.torque_std);
+                if (plotData.feature.torque_mean) charts['dt-torque-chart'].data.datasets[1].data = plotData.feature.torque_mean.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.torque_min) charts['dt-torque-chart'].data.datasets[2].data = plotData.feature.torque_min.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.torque_max) charts['dt-torque-chart'].data.datasets[3].data = plotData.feature.torque_max.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.torque_median) charts['dt-torque-chart'].data.datasets[4].data = plotData.feature.torque_median.map(p => ({x: new Date(p.x), y: p.y}));
+                if (plotData.feature.torque_std) charts['dt-torque-chart'].data.datasets[5].data = plotData.feature.torque_std.map(p => ({x: new Date(p.x), y: p.y}));
             }
 
             // Update time range input fields and flags
@@ -1099,12 +1089,10 @@
                     live: { dataKey: 'live', metric: 'voltage', datasetIndex: 0 },
                 },
                 'real-rpm-chart': {
-                    raw: { dataKey: 'raw', metric: 'gpio_rpm', datasetIndex: 0 }, // Prioritized raw RPM
-                    live: { dataKey: 'live', metric: 'rpm', datasetIndex: 0 }, // Fallback Live RPM
+                    live: { dataKey: 'live', metric: 'rpm', datasetIndex: 0 },
                 },
                 'real-vibration-chart': {
-                    raw: { dataKey: 'raw', metric: 'vibration_vin', datasetIndex: 0 }, // Prioritized raw Vibration
-                    live: { dataKey: 'live', metric: 'vibration', datasetIndex: 0 }, // Fallback Live Vibration
+                    live: { dataKey: 'live', metric: 'vibration', datasetIndex: 0 },
                 },
                 'real-temp-chart': {
                     raw: { dataKey: 'raw', metric: 'temperature', datasetIndex: 0 },
@@ -1140,7 +1128,7 @@
                     twin: { dataKey: 'twin', metric: 'vibration', datasetIndex: 0 },
                 },
                 'dt-temp-chart': {
-                    twin: { dataKey: 'twin', metric: 'temp', datasetIndex: 0 }, // Note: Twin uses 'temp' not 'temperature'
+                    twin: { dataKey: 'twin', metric: 'temperature', datasetIndex: 0 },
                     mean: { dataKey: 'feature', metric: 'temperature_mean', datasetIndex: 1 },
                     min: { dataKey: 'feature', metric: 'temperature_min', datasetIndex: 2 },
                     max: { dataKey: 'feature', metric: 'temperature_max', datasetIndex: 3 },
@@ -1166,79 +1154,70 @@
 
                 const mappings = chartDataMappings[chartId];
 
-                // Special handling for real-rpm-chart and real-vibration-chart to prioritize raw data
-                if (chartId === 'real-rpm-chart' || chartId === 'real-vibration-chart') {
-                    const rawMapping = mappings.raw;
-                    const liveMapping = mappings.live;
+                for (const mappingType in mappings) {
+                    const mapping = mappings[mappingType];
+                    const dataset = chart.data.datasets[mapping.datasetIndex];
+                    if (!dataset) {
+                        console.warn(`Dataset ${mapping.datasetIndex} not found for chart ${chartId}.`);
+                        continue; // Skip if dataset doesn't exist
+                    }
+
+                    let sourceData = dataPoint[mapping.dataKey];
                     let value = null;
                     let timestamp = null;
                     let predictionStatus = null;
 
-                    // Try to get raw data first
-                    if (dataPoint[rawMapping.dataKey] && dataPoint[rawMapping.dataKey][rawMapping.metric]) {
-                        value = dataPoint[rawMapping.dataKey][rawMapping.metric].y;
-                        timestamp = new Date(dataPoint[rawMapping.dataKey][rawMapping.metric].x);
-                        predictionStatus = dataPoint[rawMapping.dataKey][rawMapping.metric].prediction;
-                    } else if (dataPoint[liveMapping.dataKey] && dataPoint[liveMapping.dataKey][liveMapping.metric]) {
-                        // Fallback to LiveData if raw is not available
-                        value = dataPoint[liveMapping.dataKey][liveMapping.metric].y;
-                        timestamp = new Date(dataPoint[liveMapping.dataKey][liveMapping.metric].x);
+                    // Prioritize raw data if available for raw charts
+                    if (mapping.dataKey === 'raw' && sourceData && sourceData[mapping.metric]) {
+                        value = sourceData[mapping.metric].y;
+                        timestamp = new Date(sourceData[mapping.metric].x);
+                        predictionStatus = sourceData[mapping.metric].prediction; // Get prediction from dataPoint
+                    }
+                    // Handle live data for voltage, rpm, vibration, and as fallback
+                    else if (mapping.dataKey === 'live' && sourceData && sourceData[mapping.metric]) {
+                        value = sourceData[mapping.metric].y;
+                        timestamp = new Date(sourceData[mapping.metric].x);
+                    }
+                    // Handle twin data
+                    else if (mapping.dataKey === 'twin' && sourceData && sourceData[mapping.metric]) {
+                        value = sourceData[mapping.metric].y;
+                        timestamp = new Date(sourceData[mapping.metric].x);
+                    }
+                    // Handle feature data
+                    else if (mapping.dataKey === 'feature' && sourceData && sourceData[mapping.metric]) {
+                        // Feature data points are named like 'temperature_mean', 'current_min' etc.
+                        // The mapping.metric already contains the full name like 'current_mean'
+                        if (sourceData[mapping.metric]) { // Check if the specific feature exists in the dataPoint
+                            value = sourceData[mapping.metric].y;
+                            timestamp = new Date(sourceData[mapping.metric].x);
+                        }
                     }
 
                     if (value !== null && timestamp) {
                         const newPoint = { x: timestamp, y: value };
-                        // Prediction status is only relevant for raw data, not for LiveData fallback
-                        if (dataPoint[rawMapping.dataKey] && dataPoint[rawMapping.dataKey][rawMapping.metric]) {
-                             newPoint.prediction = predictionStatus;
+                        if (mapping.dataKey === 'raw') {
+                            newPoint.prediction = predictionStatus; // Attach prediction for raw data points
                         }
-                        const dataset = chart.data.datasets[rawMapping.datasetIndex]; // Always target the first dataset for the primary metric
+                        
                         dataset.data.push(newPoint);
+                        // console.log(`Added point to ${chartId} - ${dataset.label}: x=${newPoint.x.toLocaleTimeString()}, y=${newPoint.y}`);
+
+                        // Remove data points older than the current chart's min X-axis value
                         while (dataset.data.length > 0 && dataset.data[0].x.getTime() < minTime) {
                             dataset.data.shift();
-                        }
-                    }
-                } else {
-                    // Handle other charts (current, temp, torque, voltage, twin data, features)
-                    for (const mappingType in mappings) {
-                        const mapping = mappings[mappingType];
-                        const dataset = chart.data.datasets[mapping.datasetIndex];
-                        if (!dataset) {
-                            console.warn(`Dataset ${mapping.datasetIndex} not found for chart ${chartId}.`);
-                            continue;
-                        }
-
-                        let sourceData = dataPoint[mapping.dataKey];
-                        let value = null;
-                        let timestamp = null;
-                        let predictionStatus = null;
-
-                        if (sourceData && sourceData[mapping.metric]) {
-                            value = sourceData[mapping.metric].y;
-                            timestamp = new Date(sourceData[mapping.metric].x);
-                            predictionStatus = sourceData[mapping.metric].prediction;
-                        }
-
-                        if (value !== null && timestamp) {
-                            const newPoint = { x: timestamp, y: value };
-                            if (mapping.dataKey === 'raw') {
-                                newPoint.prediction = predictionStatus;
-                            }
-
-                            dataset.data.push(newPoint);
-                            while (dataset.data.length > 0 && dataset.data[0].x.getTime() < minTime) {
-                                dataset.data.shift();
-                            }
+                            // console.log(`Shifted point from ${chartId} - ${dataset.label}`);
                         }
                     }
                 }
                 // Update X-axis min/max for the sliding window for each chart
+                // This must be done for each chart individually as their data might differ
                 chart.options.scales.x.max = now;
                 chart.options.scales.x.min = new Date(minTime);
-                chart.update('none');
+                chart.update('none'); // Update chart after all datasets for this chart are modified
             }
             applySharedYAxisScale(); // Re-apply shared Y-axis scaling
         }
-
+        
         // Event listener for when the DOM is fully loaded
         document.addEventListener('DOMContentLoaded', () => {
             // Define a consistent color palette for each metric type and its features
@@ -1250,8 +1229,8 @@
                 median: 'rgb(54, 162, 235)',    // Blue for median
                 std: 'rgb(153, 102, 255)',      // Purple for std
                 voltage: 'rgb(255, 99, 132)',   // Red for voltage
-                rpm: 'rgb(54, 162, 235)',       // Default Blue for RPM
-                vibration: 'rgb(255, 205, 86)', // Default Yellow for vibration
+                rpm: 'rgb(54, 162, 235)',       // Blue for RPM
+                vibration: 'rgb(255, 205, 86)', // Yellow for vibration
                 temperature: 'rgb(153, 102, 255)', // Purple for raw temperature
                 torque: 'rgb(255, 159, 64)'     // Orange for raw torque
             };
@@ -1287,7 +1266,7 @@
 
             // Initialize real motor RPM chart
             initializeChart('real-rpm-chart', 'Drehzahlverlauf über die Zeit', [
-                { label: 'Drehzahl (U/min)', borderColor: colors.rpm, showLine: true }
+                { label: 'Drehzahl (U/min)', borderColor: colors.rpm, pointRadius: 0 }
             ], {
                 scales: {
                     y: {
@@ -1298,7 +1277,7 @@
             });
             // Initialize real motor vibration chart
             initializeChart('real-vibration-chart', 'Vibrationsverlauf über die Zeit', [
-                { label: 'Vibration (mm/s)', borderColor: colors.vibration, showLine: true }
+                { label: 'Vibration (mm/s)', borderColor: colors.vibration, pointRadius: 0 }
             ], {
                 scales: {
                     y: {
@@ -1342,7 +1321,12 @@
 
             // Initialize digital twin current chart with dashed lines
             initializeChart('dt-current-chart', 'Stromverlauf über die Zeit (Modell)', [
-                { label: 'Strom (A) ', borderColor: colors.raw, pointRadius: 0 }
+                { label: 'Strom (A) ', borderColor: colors.raw, pointRadius: 0 },
+                { label: 'Strom Mean ', borderColor: colors.mean, borderWidth: 2, tension: 0.3, pointRadius: 0 },
+                { label: 'Strom Min ', borderColor: colors.min, borderWidth: 1, borderDash: [2, 2], pointRadius: 0 },
+                { label: 'Strom Max ', borderColor: colors.max, borderWidth: 1, borderDash: [2, 2], pointRadius: 0 },
+                { label: 'Strom Median ', borderColor: colors.median, borderWidth: 1, borderDash: [5, 5], pointRadius: 0 },
+                { label: 'Strom Std ', borderColor: colors.std, borderWidth: 1, borderDash: [1, 1], pointRadius: 0 }
             ], {
                 scales: {
                     y: {
