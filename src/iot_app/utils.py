@@ -74,7 +74,7 @@ def get_latest_raw_data_for_dashboard():
         'torque': RawData.objects.filter(metric_type='torque').order_by('-timestamp').first(),
         'vibration_vin': RawData.objects.filter(metric_type='vibration_vin').order_by('-timestamp').first(),
         'gpio_rpm': RawData.objects.filter(metric_type='gpio_rpm').order_by('-timestamp').first(),
-        'voltage': RawData.objects.filter(metric_type='voltage').order_by('-timestamp').first(), # NEU
+        'voltage': RawData.objects.filter(metric_type='voltage').order_by('-timestamp').first(), 
     }
     dashboard_raw_data = {
         metric: {'value': getattr(data, 'value', None), 'unit': '', 'timestamp': getattr(data, 'timestamp', None)} # Added 'unit' and 'timestamp'
@@ -86,7 +86,7 @@ def get_latest_raw_data_for_dashboard():
     if dashboard_raw_data['torque']['value'] is not None: dashboard_raw_data['torque']['unit'] = 'Nm'
     if dashboard_raw_data['vibration_vin']['value'] is not None: dashboard_raw_data['vibration_vin']['unit'] = 'mm/s'
     if dashboard_raw_data['gpio_rpm']['value'] is not None: dashboard_raw_data['gpio_rpm']['unit'] = 'U/min'
-    if dashboard_raw_data['voltage']['value'] is not None: dashboard_raw_data['voltage']['unit'] = 'V' # NEU
+    if dashboard_raw_data['voltage']['value'] is not None: dashboard_raw_data['voltage']['unit'] = 'V' 
 
     return dashboard_raw_data
 
@@ -194,7 +194,7 @@ def get_dashboard_data():
     real_motor_data = {
         'Motorzustand': {'value': motor_state, 'unit': ''},
         'Strom': raw_data_panel['current'] if raw_data_panel['current']['value'] is not None else live_data['Strom'],
-        'Spannung': raw_data_panel['voltage'] if raw_data_panel['voltage']['value'] is not None else live_data['Spannung'], # NEU: Priorisierung
+        'Spannung': raw_data_panel['voltage'] if raw_data_panel['voltage']['value'] is not None else live_data['Spannung'], 
         'Drehzahl': raw_data_panel['gpio_rpm'] if raw_data_panel['gpio_rpm']['value'] is not None else live_data['Drehzahl'],
         'Vibration': raw_data_panel['vibration_vin'] if raw_data_panel['vibration_vin']['value'] is not None else live_data['Vibration'],
         'Temperatur': raw_data_panel['temperature'] if raw_data_panel['temperature']['value'] is not None else live_data['Temperatur'],
@@ -213,7 +213,7 @@ def get_dashboard_data():
     dashboard_feature_data = get_latest_feature_data_for_dashboard()
     dashboard_prediction_data = get_latest_prediction_data_for_dashboard()
 
-    # Retrieve the last 5 malfunction logs (if needed)
+    # Retrieve the last 5 malfunction logs 
     latest_malfunction_logs = MalfunctionLog.objects.order_by('-timestamp')[:5]
     malfunction_logs_serializable = []
     for log in latest_malfunction_logs:
@@ -391,7 +391,7 @@ def get_plot_data(start_time=None, end_time=None):
         if entry.metric_type == 'torque' and entry.value is not None: plot_data['raw']['torque'].append(point)
         if entry.metric_type == 'vibration_vin' and entry.value is not None: plot_data['raw']['vibration_vin'].append(point)
         if entry.metric_type == 'gpio_rpm' and entry.value is not None: plot_data['raw']['gpio_rpm'].append(point)
-        if entry.metric_type == 'voltage' and entry.value is not None: plot_data['raw']['voltage'].append(point) # NEU
+        if entry.metric_type == 'voltage' and entry.value is not None: plot_data['raw']['voltage'].append(point) 
 
     # Process FeatureData
     for entry in feature_data_queryset:
@@ -441,7 +441,7 @@ def get_latest_plot_data_point():
     latest_raw_torque = RawData.objects.filter(metric_type='torque').order_by('-timestamp').first()
     latest_raw_vibration_vin = RawData.objects.filter(metric_type='vibration_vin').order_by('-timestamp').first()
     latest_raw_gpio_rpm = RawData.objects.filter(metric_type='gpio_rpm').order_by('-timestamp').first()
-    latest_raw_voltage = RawData.objects.filter(metric_type='voltage').order_by('-timestamp').first() # NEU
+    latest_raw_voltage = RawData.objects.filter(metric_type='voltage').order_by('-timestamp').first() 
 
     # Get latest feature data points for each metric type
     latest_feature_temp = FeatureData.objects.filter(metric_type='temperature').order_by('-timestamp').first()
@@ -500,7 +500,7 @@ def get_latest_plot_data_point():
         ts = latest_raw_gpio_rpm.timestamp.isoformat()
         # No prediction for gpio_rpm yet, so prediction_status is None
         if latest_raw_gpio_rpm.value is not None: data_point['raw']['gpio_rpm'] = {'x': ts, 'y': latest_raw_gpio_rpm.value, 'prediction': None}
-    if latest_raw_voltage: # NEU
+    if latest_raw_voltage: 
         ts = latest_raw_voltage.timestamp.isoformat()
         # No prediction for voltage yet, so prediction_status is None
         if latest_raw_voltage.value is not None: data_point['raw']['voltage'] = {'x': ts, 'y': latest_raw_voltage.value, 'prediction': None}
