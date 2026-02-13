@@ -28,8 +28,6 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         self.live_mode_active = False # Flag to control continuous plot updates
         # Stores the start time of the currently displayed plot window.
         # Used to re-request data if a plot_boundary_update occurs in live mode.
-        # This will be None if the current view is a 10-minute sliding window,
-        # or a specific datetime if it's an active run with a fixed start.
         self.current_plot_start_time = None
         # Stores the end time of the currently displayed plot window (if fixed).
         # Not used for live mode where end time is always 'now'.
@@ -105,7 +103,7 @@ class DashboardConsumer(AsyncWebsocketConsumer):
                 await self.send_plot_data(start_time=start_time, end_time=end_time, plot_type='historical_or_live_range')
 
             elif message_type == 'request_initial_data':
-                # Frontend requests initial data (e.g., "Aktuellen Lauf anzeigen" button or initial load)
+                # Frontend requests initial data 
                 print("Frontend requested initial data (current run or 10 min live).")
                 await self.send_plot_data(plot_type='initial_load_live') # Request initial live view
 
@@ -121,7 +119,7 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         serializable_data = to_serializable_dict(data)
         await self.send(text_data=json.dumps({
             'type': 'dashboard_update',
-            'message': serializable_data # Use the serializable data
+            'message': serializable_data 
         }))
 
     async def dashboard_message(self, event):
@@ -143,7 +141,6 @@ class DashboardConsumer(AsyncWebsocketConsumer):
             #     print("Skipping plot_data_point: Live mode is not active.") # Uncomment for debugging
         elif message_type == "plot_boundary_update":
             # A new plot boundary has been set, re-send historical data
-            # This might be triggered by external events, so re-evaluate live mode
             if self.live_mode_active:
                 print("Received plot_boundary_update in live mode, re-requesting initial live view.")
                 # Re-send the current live view based on the stored start time or default 10 min
@@ -275,8 +272,6 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         if current_end_time and current_end_time != 'live' and not timezone.is_aware(current_end_time):
             current_end_time = timezone.make_aware(current_end_time)
 
-        # The `self.current_plot_start_time` is already set in the logic above
-        # The `self.current_plot_end_time` is only relevant for fixed ranges, and also set above.
 
         # Fetch data for the determined time window
         # If current_end_time is 'live', pass timezone.now() to get_plot_data
@@ -320,4 +315,5 @@ class DashboardConsumer(AsyncWebsocketConsumer):
             }))
             # print(f"Sent latest plot data point: {serializable_data_point.get('raw', {}).get('current', 'N/A')}") # Uncomment for debugging
         # else:
+
         #     print("No new plot data point available to send.") # uncomment for debugging
