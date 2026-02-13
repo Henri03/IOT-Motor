@@ -25,12 +25,12 @@ class DashboardConsumer(AsyncWebsocketConsumer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.live_mode_active = False # Flag to control continuous plot updates
-        # Stores the start time of the currently displayed plot window.
-        # Used to re-request data if a plot_boundary_update occurs in live mode.
+        self.live_mode_active = False # Flag to control continuous plot update
+        # Stores the start time of the currently displayed plot window
+        # Used to re-request data if a plot_boundary_update occurs in live mode
         self.current_plot_start_time = None
-        # Stores the end time of the currently displayed plot window (if fixed).
-        # Not used for live mode where end time is always 'now'.
+        # Stores the end time of the currently displayed plot window
+        # Not used for live mode where end time is always 'now'
         self.current_plot_end_time = None
 
     async def connect(self):
@@ -317,3 +317,4 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         # else:
 
         #     print("No new plot data point available to send.") # uncomment for debugging
+
