@@ -605,7 +605,7 @@
                 ],
                 yAxisID: 'y'
             },
-            'voltage': { // NEU: realDatasets auf Raw Voltage angepasst
+            'voltage': { 
                 realChartId: 'real-voltage-chart', realDatasets: [{ datasetIndex: 0 }], // Raw Voltage
                 twinChartId: 'dt-voltage-chart', twinDatasets: [{ datasetIndex: 0 }], // Twin Voltage
                 yAxisID: 'y'
@@ -652,12 +652,12 @@
                 ],
                 yAxisID: 'y'
             },
-            'rpm': { // NEU: realDatasets auf Raw RPM angepasst
+            'rpm': { 
                 realChartId: 'real-rpm-chart', realDatasets: [{ datasetIndex: 0 }], // Raw RPM
                 twinChartId: 'dt-rpm-chart', twinDatasets: [{ datasetIndex: 0 }], // Twin RPM
                 yAxisID: 'y'
             },
-            'vibration': { // NEU: realDatasets auf Raw Vibration angepasst
+            'vibration': { 
                 realChartId: 'real-vibration-chart', realDatasets: [{ datasetIndex: 0 }], // Raw Vibration
                 twinChartId: 'dt-vibration-chart', twinDatasets: [{ datasetIndex: 0 }], // Twin Vibration
                 yAxisID: 'y'
@@ -927,7 +927,7 @@
                 if (plotData.raw.current) {
                     charts['real-current-chart'].data.datasets[0].data = processRawDataForChart(plotData.raw.current);
                 }
-                if (plotData.raw.voltage) { // NEU: Raw Voltage
+                if (plotData.raw.voltage) { 
                     charts['real-voltage-chart'].data.datasets[0].data = processRawDataForChart(plotData.raw.voltage);
                 }
                 if (plotData.raw.temperature) {
@@ -948,7 +948,7 @@
                 if ((!plotData.raw || !plotData.raw.current || plotData.raw.current.length === 0) && plotData.live.current) {
                     charts['real-current-chart'].data.datasets[0].data = plotData.live.current.map(p => ({x: new Date(p.x), y: p.y}));
                 }
-                if ((!plotData.raw || !plotData.raw.voltage || plotData.raw.voltage.length === 0) && plotData.live.voltage) { // NEU: Fallback for Voltage
+                if ((!plotData.raw || !plotData.raw.voltage || plotData.raw.voltage.length === 0) && plotData.live.voltage) { 
                     charts['real-voltage-chart'].data.datasets[0].data = plotData.live.voltage.map(p => ({x: new Date(p.x), y: p.y}));
                 }
                 if ((!plotData.raw || !plotData.raw.gpio_rpm || plotData.raw.gpio_rpm.length === 0) && plotData.live.rpm) {
@@ -1024,7 +1024,7 @@
             liveEndTimeMode = isLiveModeActive; // Set based on backend's live_mode_active
             // currentLiveWindowStartTime is only set if an explicit start time is provided AND live mode is active
             // If startTime is null, it means the backend defaulted to a 10-minute sliding window,
-            // so currentLiveWindowStartTime should also be null to allow client-side calculation.
+       
             currentLiveWindowStartTime = (isLiveModeActive && startTime) ? new Date(startTime) : null;
 
             Object.values(charts).forEach(chart => {
@@ -1032,7 +1032,7 @@
                     const now = new Date();
                     let start;
                     if (currentLiveWindowStartTime) {
-                        // If a specific start time is provided for live mode (e.g., active run start)
+                        // If a specific start time is provided for live mode
                         start = currentLiveWindowStartTime;
                     } else {
                         // If no specific start time, use a 10-minute sliding window
@@ -1097,7 +1097,7 @@
                     median: { dataKey: 'feature', metric: 'current_median', datasetIndex: 4 },
                     std: { dataKey: 'feature', metric: 'current_std', datasetIndex: 5 },
                 },
-                'real-voltage-chart': { // NEU
+                'real-voltage-chart': { 
                     raw: { dataKey: 'raw', metric: 'voltage', datasetIndex: 0 },
                 },
                 'real-rpm-chart': {
@@ -1124,13 +1124,13 @@
                 },
                 'dt-current-chart': {
                     twin: { dataKey: 'twin', metric: 'current', datasetIndex: 0 },
-                    mean: { dataKey: 'feature', metric: 'current_mean', datasetIndex: 1 }, // Assuming twin also has features
+                    mean: { dataKey: 'feature', metric: 'current_mean', datasetIndex: 1 }, 
                     min: { dataKey: 'feature', metric: 'current_min', datasetIndex: 2 },
                     max: { dataKey: 'feature', metric: 'current_max', datasetIndex: 3 },
                     median: { dataKey: 'feature', metric: 'current_median', datasetIndex: 4 },
                     std: { dataKey: 'feature', metric: 'current_std', datasetIndex: 5 },
                 },
-                'dt-voltage-chart': { // NEU
+                'dt-voltage-chart': { 
                     twin: { dataKey: 'twin', metric: 'voltage', datasetIndex: 0 },
                 },
                 'dt-rpm-chart': {
@@ -1140,7 +1140,7 @@
                     twin: { dataKey: 'twin', metric: 'vibration', datasetIndex: 0 },
                 },
                 'dt-temp-chart': {
-                    twin: { dataKey: 'twin', metric: 'temp', datasetIndex: 0 }, // Twin uses 'temp' for temperature
+                    twin: { dataKey: 'twin', metric: 'temp', datasetIndex: 0 }, 
                     mean: { dataKey: 'feature', metric: 'temperature_mean', datasetIndex: 1 },
                     min: { dataKey: 'feature', metric: 'temperature_min', datasetIndex: 2 },
                     max: { dataKey: 'feature', metric: 'temperature_max', datasetIndex: 3 },
@@ -1187,10 +1187,9 @@
                     }
                     // Handle live data for voltage, rpm, vibration, and as fallback
                     else if (mapping.dataKey === 'live' && sourceData && sourceData[mapping.metric]) {
-                        // This case is for live data that is NOT raw data, e.g., run_time, or if raw data is missing
-                        // In the current setup, voltage, rpm, vibration are now primarily raw, but live data might still exist as fallback.
-                        // However, for plot_data_point, we expect raw data if it's available.
-                        // If raw data is not available, and live data comes, it will be added here.
+                        // This case is for live data that is NOT raw data or if raw data is missing
+                        // In the current setup, voltage, rpm, vibration are raw, but live data still exists as fallback.
+                    
                         value = sourceData[mapping.metric].y;
                         timestamp = new Date(sourceData[mapping.metric].x);
                     }
@@ -1271,7 +1270,7 @@
 
             // Initialize real motor voltage chart (now uses Raw Voltage)
             initializeChart('real-voltage-chart', 'Spannungsverlauf über die Zeit', [
-                { label: 'Spannung (Raw)', borderColor: colors.voltage, pointRadius: 0 } // NEU: Label angepasst
+                { label: 'Spannung (Raw)', borderColor: colors.voltage, pointRadius: 0 } 
             ], {
                 scales: {
                     y: {
@@ -1283,7 +1282,7 @@
 
             // Initialize real motor RPM chart (now uses Raw RPM)
             initializeChart('real-rpm-chart', 'Drehzahlverlauf über die Zeit', [
-                { label: 'Drehzahl (Raw)', borderColor: colors.rpm, pointRadius: 0 } // NEU: Label angepasst
+                { label: 'Drehzahl (Raw)', borderColor: colors.rpm, pointRadius: 0 } 
             ], {
                 scales: {
                     y: {
@@ -1294,7 +1293,7 @@
             });
             // Initialize real motor vibration chart (now uses Raw Vibration)
             initializeChart('real-vibration-chart', 'Vibrationsverlauf über die Zeit', [
-                { label: 'Vibration (Raw)', borderColor: colors.vibration, pointRadius: 0 } // NEU: Label angepasst
+                { label: 'Vibration (Raw)', borderColor: colors.vibration, pointRadius: 0 } 
             ], {
                 scales: {
                     y: {
@@ -1355,7 +1354,7 @@
 
             // Initialize digital twin voltage chart with dashed lines
             initializeChart('dt-voltage-chart', 'Spannungsverlauf über die Zeit (Modell)', [
-                { label: 'Spannung (V) ', borderColor: colors.voltage, pointRadius: 0 } // NEU: Label angepasst
+                { label: 'Spannung (V) ', borderColor: colors.voltage, pointRadius: 0 } 
             ], {
                 scales: {
                     y: {
@@ -1367,7 +1366,7 @@
 
             // Initialize digital twin RPM chart with dashed lines
             initializeChart('dt-rpm-chart', 'Drehzahlverlauf über die Zeit (Modell)', [
-                { label: 'Drehzahl (U/min) ', borderColor: colors.rpm, pointRadius: 0 } // NEU: Label angepasst
+                { label: 'Drehzahl (U/min) ', borderColor: colors.rpm, pointRadius: 0 } 
             ], {
                 scales: {
                     y: {
@@ -1378,7 +1377,7 @@
             });
             // Initialize digital twin vibration chart with dashed lines
             initializeChart('dt-vibration-chart', 'Vibrationsverlauf über die Zeit (Modell)', [
-                { label: 'Vibration (mm/s) ', borderColor: colors.vibration, pointRadius: 0 } // NEU: Label angepasst
+                { label: 'Vibration (mm/s) ', borderColor: colors.vibration, pointRadius: 0 } 
             ], {
                 scales: {
                     y: {
@@ -1534,7 +1533,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             const endTimeModeSelect = document.getElementById('end-time-mode');
             const endTimeInput = document.getElementById('plot-end-time');
-            // On initial load, we expect to be in live mode (as per socket.onopen request)
+            // On initial load, we expect to be in live mode ( socket.onopen request)
             liveEndTimeMode = true; // Set client-side flag to true
             endTimeModeSelect.value = 'live';
             endTimeInput.disabled = true;
@@ -1542,4 +1541,5 @@
         });
     </script>
 </body>
+
 </html>
