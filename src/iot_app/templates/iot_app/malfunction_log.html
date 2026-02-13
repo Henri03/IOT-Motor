@@ -331,7 +331,7 @@
                     }
 
                     const logId = this.dataset.logId;
-                    // Send AJAX request to delete the log
+                    // Send request to delete the log
                     fetch(`/delete-log/${logId}/`, {
                         method: 'POST', // Use POST for deletion
                         headers: {
@@ -363,4 +363,5 @@
         });
     </script>
 </body>
+
 </html>
